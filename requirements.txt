@@ -1,0 +1,6 @@
+# MVP 的 HTTP 服务和数据层使用 Python 标准库；以下依赖用于真实 API、图片校验和测试增强。
+httpx>=0.27.0
+Pillow>=10.0.0
+python-dotenv>=1.0.1
+pytest>=8.0.0
+
