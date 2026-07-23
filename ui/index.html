@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>电商图 AI 工作台</title>
+  <style>
+    :root { --ink:#18232d; --muted:#74808c; --line:#e6ebef; --soft:#f5f7f8; --paper:#fff; --accent:#2e7d6d; --accent2:#dff2ec; --orange:#d67d39; --danger:#c44d4d; --shadow:0 12px 32px rgba(22,38,50,.07); }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); background:#f7f8f8; font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Microsoft YaHei", sans-serif; }
+    button, input, textarea, select { font:inherit; }
+    button { cursor:pointer; border:0; }
+    .app { min-height:100vh; display:grid; grid-template-columns:280px 1fr; }
+    .sidebar { background:#14211f; color:#ecf4f0; padding:26px 18px; display:flex; flex-direction:column; gap:20px; }
+    .brand { padding:4px 12px 14px; border-bottom:1px solid rgba(255,255,255,.12); }
+    .brand b { display:block; font-size:20px; letter-spacing:.02em; }
+    .brand span { display:block; color:#a8bdb5; font-size:12px; margin-top:7px; }
+    .side-title { display:flex; align-items:center; justify-content:space-between; color:#a8bdb5; font-size:12px; padding:0 8px; }
+    .project-list { display:flex; flex-direction:column; gap:6px; overflow:auto; }
+    .project-item { color:#e8f0ed; background:transparent; text-align:left; padding:12px; border-radius:12px; display:block; width:100%; }
+    .project-item:hover, .project-item.active { background:rgba(255,255,255,.1); }
+    .project-item strong { display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:13px; }
+    .project-item small { display:block; color:#9cb2aa; font-size:11px; margin-top:5px; }
+    .main { padding:30px 34px 60px; max-width:1600px; width:100%; margin:auto; }
+    .topbar { display:flex; justify-content:space-between; align-items:flex-start; gap:20px; margin-bottom:24px; }
+    h1 { font-size:28px; line-height:1.2; margin:0 0 8px; letter-spacing:-.03em; }
+    h2 { font-size:20px; margin:0; letter-spacing:-.02em; }
+    h3 { font-size:15px; margin:0; }
+    p { color:var(--muted); margin:0; line-height:1.7; font-size:13px; }
+    .eyebrow { color:var(--accent); font-weight:700; font-size:11px; letter-spacing:.12em; text-transform:uppercase; margin-bottom:9px; }
+    .btn { border-radius:10px; padding:10px 14px; font-weight:650; font-size:13px; transition:.15s; }
+    .btn:disabled { opacity:.45; cursor:not-allowed; }
+    .btn-primary { background:var(--accent); color:white; box-shadow:0 5px 14px rgba(46,125,109,.2); }
+    .btn-primary:hover:not(:disabled) { background:#246656; transform:translateY(-1px); }
+    .btn-ghost { background:#edf2f1; color:#31574f; }
+    .btn-light { background:#fff; color:var(--ink); border:1px solid var(--line); }
+    .btn-danger { color:var(--danger); background:#fff0f0; }
+    .panel { background:var(--paper); border:1px solid var(--line); border-radius:18px; box-shadow:var(--shadow); padding:24px; }
+    .empty { min-height:420px; display:grid; place-items:center; text-align:center; }
+    .empty-inner { max-width:420px; }
+    .empty-mark { width:70px; height:70px; border-radius:22px; display:grid; place-items:center; margin:0 auto 18px; background:var(--accent2); color:var(--accent); font-size:30px; }
+    .form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
+    .field { display:flex; flex-direction:column; gap:7px; }
+    .field.full { grid-column:1/-1; }
+    label { font-weight:700; font-size:13px; }
+    .hint { font-size:11px; color:var(--muted); font-weight:400; }
+    input[type=text], input[type=number], input[type=file], textarea, select { width:100%; border:1px solid #dce3e4; border-radius:10px; padding:10px 11px; color:var(--ink); background:#fcfdfd; outline:0; }
+    input:focus, textarea:focus, select:focus { border-color:#83bdb0; box-shadow:0 0 0 3px rgba(46,125,109,.1); }
+    textarea { min-height:90px; resize:vertical; line-height:1.6; }
+    input[type=file] { padding:8px; font-size:12px; }
+    .section { margin-top:28px; padding-top:22px; border-top:1px solid var(--line); }
+    .section-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
+    .logic-tabs { display:flex; gap:8px; flex-wrap:wrap; margin:16px 0; padding:6px; background:var(--soft); border:1px solid var(--line); border-radius:13px; }
+    .logic-tab { flex:1; min-width:120px; padding:11px 14px; border-radius:9px; color:#52625e; background:transparent; font-weight:750; }
+    .logic-tab.active { color:#fff; background:var(--accent); box-shadow:0 5px 14px rgba(46,125,109,.18); }
+    .constraint-panel { display:none; padding:18px; border:1px solid #dfe9e6; border-radius:14px; background:#fbfdfc; }
+    .constraint-panel.active { display:block; }
+    .constraint-panel > p { margin-bottom:14px; }
+    .group-constraint { min-height:190px; }
+    .settings-task-list { margin-top:18px; padding-top:18px; border-top:1px dashed #d8e4e0; }
+    .variable-guide { margin:14px 0 18px; padding:14px; border:1px solid #dbe7e3; border-radius:12px; background:#f7fbfa; }
+    .variable-guide > p { margin-bottom:10px; }
+    .variable-chips { display:flex; flex-wrap:wrap; gap:8px; }
+    .variable-chip { padding:7px 9px; border-radius:8px; background:#fff; border:1px solid var(--line); font-size:11px; color:#52625e; }
+    .variable-chip code { color:var(--accent); font-weight:800; }
+    .task-options { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; }
+    .task-option { padding:11px; background:var(--soft); border:1px solid var(--line); border-radius:10px; display:flex; gap:9px; align-items:flex-start; font-size:12px; font-weight:600; }
+    .task-option input { accent-color:var(--accent); margin-top:2px; }
+    .extra-list { display:flex; flex-direction:column; gap:12px; }
+    .extra-row { border:1px solid #dfe9e6; border-radius:14px; background:#fbfdfc; padding:15px; display:grid; grid-template-columns:36px 1fr 34px; gap:12px; align-items:start; }
+    .extra-num { width:28px; height:28px; border-radius:50%; background:var(--accent2); color:var(--accent); display:grid; place-items:center; font-size:12px; font-weight:800; }
+    .extra-fields { display:grid; gap:10px; }
+    .remove-extra { background:transparent; color:var(--muted); font-size:20px; line-height:1; }
+    .form-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:28px; }
+    .workspace-head { display:flex; justify-content:space-between; align-items:flex-start; gap:20px; }
+    .head-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+    .stats { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin:20px 0; }
+    .stat { border:1px solid var(--line); border-radius:13px; padding:14px; background:#fbfcfc; }
+    .stat b { display:block; font-size:22px; margin-bottom:2px; }
+    .stat span { color:var(--muted); font-size:11px; }
+    .ref-strip { display:flex; align-items:center; gap:12px; border-top:1px solid var(--line); padding-top:16px; }
+    .ref-thumb { width:62px; height:62px; object-fit:cover; border-radius:10px; border:1px solid var(--line); background:#eef2f1; }
+     .logic-section { margin-top:24px; }
+     .logic-section h3 { color:var(--accent); font-size:15px; margin-bottom:10px; }
+     .task-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
+    .task-card { background:#fff; border:1px solid var(--line); border-radius:16px; overflow:hidden; box-shadow:0 7px 22px rgba(22,38,50,.045); }
+    .task-card.extra { border-color:#c8e4dc; }
+    .card-top { display:flex; justify-content:space-between; gap:10px; padding:15px 16px 12px; }
+    .task-id { color:var(--accent); font-weight:800; margin-right:5px; }
+    .status { border-radius:99px; padding:4px 8px; font-size:10px; font-weight:800; white-space:nowrap; background:#edf2f1; color:#5b6d68; }
+    .status.generating, .status.queued { background:#fff2dc; color:#a36724; }
+    .status.ready, .status.approved { background:#e0f3ec; color:#2d7867; }
+    .status.failed { background:#fff0f0; color:var(--danger); }
+    .image-box { background:#f1f3f2; aspect-ratio:1/1; display:grid; place-items:center; overflow:hidden; }
+    .image-box img { width:100%; height:100%; object-fit:cover; display:block; }
+    .image-placeholder { color:var(--muted); font-size:12px; padding:20px; text-align:center; }
+    .card-body { padding:15px 16px 16px; }
+    .version-row { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px; }
+    .version-row span { font-size:11px; color:var(--muted); }
+    .version-select { padding:7px 8px; font-size:11px; width:auto; max-width:210px; }
+    .card-body textarea { min-height:115px; font-size:12px; }
+    .edit-box { margin-top:10px; min-height:70px !important; }
+    .card-actions { display:flex; flex-wrap:wrap; gap:7px; margin-top:11px; }
+    .card-actions .btn { padding:8px 10px; font-size:11px; }
+    .card-foot { border-top:1px solid var(--line); padding-top:11px; margin-top:12px; color:var(--muted); font-size:11px; line-height:1.5; }
+    .error { color:var(--danger); background:#fff5f5; border-radius:9px; padding:8px; margin-top:10px; font-size:11px; white-space:pre-wrap; }
+    .toast { position:fixed; right:24px; bottom:24px; z-index:5; padding:13px 16px; color:#fff; background:#182b27; border-radius:11px; box-shadow:var(--shadow); opacity:0; transform:translateY(8px); pointer-events:none; transition:.2s; font-size:13px; }
+    .toast.show { opacity:1; transform:translateY(0); }
+    .hidden { display:none !important; }
+    .progress-line { height:6px; border-radius:6px; overflow:hidden; background:#e8eeec; margin:15px 0 5px; }
+    .progress-line i { display:block; height:100%; background:var(--accent); border-radius:6px; transition:width .25s; }
+    .notice { border-left:3px solid var(--orange); background:#fff9f1; color:#7e5a38; padding:11px 13px; border-radius:7px; font-size:12px; line-height:1.6; }
+    @media (max-width:1000px) { .app{grid-template-columns:1fr;} .sidebar{min-height:auto; padding:16px;}.project-list{flex-direction:row;}.project-item{min-width:190px;} .task-options{grid-template-columns:repeat(2,1fr);} }
+    @media (max-width:700px) { .main{padding:20px 14px 40px;} .form-grid,.task-grid{grid-template-columns:1fr;} .stats{grid-template-columns:repeat(2,1fr);} .task-options{grid-template-columns:1fr;} .topbar,.workspace-head{display:block;} .head-actions{justify-content:flex-start; margin-top:16px;} }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand"><b>电商图 AI 工作台</b><span>本地生成 · 审核 · 版本管理</span></div>
+      <div class="side-title"><span>我的项目</span><div style="display:flex;gap:6px"><button class="btn btn-ghost" id="side-settings">设置</button><button class="btn btn-ghost" id="side-new">+ 新建</button></div></div>
+      <div class="project-list" id="project-list"></div>
+    </aside>
+    <main class="main">
+      <section class="topbar"><div><div class="eyebrow">LOCAL IMAGE STUDIO</div><h1 id="page-title">从一张产品图开始</h1><p id="page-subtitle">将工作流里的业务规则变成可以预览、审核和迭代的图片任务。</p></div><button class="btn btn-primary" id="top-new">新建项目</button></section>
+      <section id="view"></section>
+    </main>
+  </div>
+  <div class="toast" id="toast"></div>
+  <script>
+    const state = { projects: [], project: null, viewVersions: {}, poll: null };
+    const $ = (s, root=document) => root.querySelector(s);
+    const $$ = (s, root=document) => [...root.querySelectorAll(s)];
+    const esc = (v='') => String(v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const date = v => v ? new Date(v).toLocaleString('zh-CN', {hour12:false}) : '';
+    const toast = (msg) => { const el=$('#toast'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); };
+    const api = async (url, options={}) => { const res=await fetch(url, options); const data=await res.json().catch(()=>({})); if(!res.ok) throw new Error(data.error || `请求失败（${res.status}）`); return data; };
+    const fileUrl = (projectId, path) => `/api/files?project=${encodeURIComponent(projectId)}&path=${encodeURIComponent(path)}`;
+
+    function renderPromptVariables(s) {
+      return `<div class="variable-guide"><p><b>可用工作流占位词</b> · 模板中保留双花括号，生成描述词时后端按当前项目替换实际值；图片变量会继续映射到实际上传顺序。</p><div class="variable-chips">${(s.prompt_variables||[]).map(v=>`<span class="variable-chip"><code>{{${esc(v.name)}}}</code> · ${esc(v.kind)} · ${esc(v.source)}</span>`).join('')}</div></div>`;
+    }
+
+    function renderPromptDesign(s) {
+      const groups=s.prompt_groups||[];
+      return `<div class="section"><div class="section-head"><div><h2>三类描述词设计</h2><p>三种工作流分别保存全局约束、分别调用 GPT-5.5 分析；下面每个编号仍对应一张独立图片。</p></div></div>${renderPromptVariables(s)}<div class="logic-tabs">${groups.map((g,i)=>`<button type="button" class="logic-tab ${i===0?'active':''}" data-action="prompt-tab" data-group="${esc(g.key)}">${esc(g.label)}</button>`).join('')}</div>${groups.map((g,i)=>`<section class="constraint-panel ${i===0?'active':''}" data-prompt-panel="${esc(g.key)}"><p><b>${esc(g.label)}专属全局约束</b> · ${esc(g.description)}</p><textarea class="group-constraint" data-group="${esc(g.key)}">${esc(s.group_constraints?.[g.key]||'')}</textarea><div class="settings-task-list"><h3>${esc(g.label)}的单图描述词</h3><p style="margin:6px 0 14px">每一条都会完整保留，并与上方本类型约束一起交给分析模型。</p>${s.task_templates.filter(d=>d.prompt_group===g.key).map(d=>`<div class="field" style="margin-bottom:14px"><label><span class="task-id">图${esc(d.id)}</span>${esc(d.name)} <span class="hint">${esc(d.logic||d.prompt_group)}</span></label><textarea class="settings-task" data-task-id="${esc(d.id)}">${esc(d.brief)}</textarea></div>`).join('')}</div></section>`).join('')}</div>`;
+    }
+
+    async function loadProjects() { state.projects = await api('/api/projects'); renderSidebar(); }
+    function renderSidebar() { $('#project-list').innerHTML = state.projects.length ? state.projects.map(p=>`<button class="project-item ${state.project?.id===p.id?'active':''}" data-open="${p.id}"><strong>${esc(p.product_name)}</strong><small>${esc(p.status)} · ${date(p.created_at)}</small></button>`).join('') : '<p style="padding:10px;color:#9cb2aa">还没有项目，先创建一组产品图。</p>'; }
+    function showEmpty() { $('#page-title').textContent='从一张产品图开始'; $('#page-subtitle').textContent='将工作流里的业务规则变成可以预览、审核和迭代的图片任务。'; $('#view').innerHTML=`<div class="panel empty"><div class="empty-inner"><div class="empty-mark">✦</div><h2>创建你的第一组电商图</h2><p style="margin:12px 0 22px">上传产品身份图，填写需求后，工作台会按任务卡片逐张生成并保留每一次版本。</p><button class="btn btn-primary" data-action="new">开始创建</button></div></div>`; }
+     async function showNew() { state.project=null; renderSidebar(); $('#page-title').textContent='新建生成项目'; $('#page-subtitle').textContent='先选择单品或系列品，再按 stt / cpt 角色上传参考图。'; const defs=await api('/api/task-definitions'); $('#view').innerHTML=`<form class="panel" id="project-form"><div class="form-grid"><div class="field"><label>产品名称 <span class="hint">用于项目和文件命名</span></label><input name="product_name" type="text" placeholder="例如：草莓捏捏玩具" required></div><div class="field"><label>stt 手托比例参考图 <span class="hint">必填；单品锁定外观与比例，系列品只锁定比例</span></label><input name="product_image" type="file" accept=".jpg,.jpeg,.png,.webp" required></div><div class="field"><label>cpt 系列外观参考图 <span class="hint series-reference-hint">单品不使用；系列品必填并锁定具体产品外观</span></label><input name="series_image" type="file" accept=".jpg,.jpeg,.png,.webp"></div><div class="field"><label>产品类型</label><select name="is_series"><option value="0" selected>单品</option><option value="1">系列品</option></select></div><div class="field"><label>产品描述、材质和回弹类型</label><input name="product_description" type="text" value="PU材质，慢回弹" placeholder="例如：PU 材质，慢回弹，草莓捏捏玩具"></div><div class="field"><label>产品数量</label><input name="product_count" type="number" min="1" value="1"></div><div class="field full"><label>展示图要求</label><textarea name="display_requirements" placeholder="例如：4 个产品放在可爱的盘子上展示">个产品放在可爱的盘子上展示</textarea></div><div class="field full"><label>自定义使用场景</label><textarea name="custom_scene" placeholder="例如：野餐场景，产品和少量零食一起放在餐布上，背景是虚化的孩子玩耍场景">野餐场景，产品和少量零食一起放在餐布上，背景是虚化的孩子玩耍场景</textarea></div><div class="field full"><label>产品尺寸 <span class="hint">用于图13；没有尺寸时不会编造数值</span></label><input name="product_dimensions" type="text" placeholder="例如：10 x 8 x 5 cm"></div></div><div class="section"><div class="section-head"><div><h2>工作流任务</h2><p>内置描述词按三种逻辑生成：尺寸展示、氛围摆放、使用场景；每一张图都有独立完整描述词。</p></div><button type="button" class="btn btn-light" data-action="toggle-tasks">全选/取消全选</button></div><div class="task-options" id="task-options">${defs.map(d=>`<label class="task-option"><input type="checkbox" name="task_choice" value="${d.id}" checked><span><b>图${d.id}</b> ${esc(d.name)} <span class="hint">· ${esc(d.logic||'图片任务')}</span><br><span class="hint">${esc(d.brief)}</span></span></label>`).join('')}</div></div><div class="section"><div class="section-head"><div><h2>额外参考图需求</h2><p>每条需求单独出图：产品图 + 本条参考图 + 本条文字要求。可持续增加。</p></div><button type="button" class="btn btn-ghost" data-action="add-extra">+ 添加一条需求</button></div><div class="notice">适合上传风格参考、构图参考、道具参考或动作参考。系统不会把不同需求的参考图混在一起。</div><div class="extra-list" id="extra-list" style="margin-top:12px"></div></div><div class="form-actions"><button type="button" class="btn btn-light" data-action="home">取消</button><button class="btn btn-primary" type="submit">开始生成</button></div></form>`; }
+     async function showSettings() { state.project=null; clearInterval(state.poll); renderSidebar(); $('#page-title').textContent='工作台设置'; $('#page-subtitle').textContent='修改 API、模型参数和内置描述词模板，保存后立即生效。'; const s=await api('/api/settings'); $('#view').innerHTML=`<form class="panel" id="settings-form"><div class="section-head"><div><div class="eyebrow">RUNTIME SETTINGS</div><h2>API 与生成参数</h2><p>Key 留空表示保持当前值；页面不会回显完整密钥。</p></div></div><div class="form-grid"><div class="field"><label>默认输出/导出目录 <span class="hint">新建项目使用；已有项目不移动</span></label><input name="output_root" type="text" value="${esc(s.output_root)}"></div><div class="field"><label>图片 API 地址</label><input name="image_api_base_url" type="text" value="${esc(s.image_api_base_url)}"></div><div class="field"><label>图片模型</label><input name="image_model" type="text" value="${esc(s.image_model)}"></div><div class="field"><label>图片 API Key <span class="hint">${esc(s.image_key_masked||'未配置')}</span></label><input name="image_api_key" type="password" placeholder="留空保持不变"></div><div class="field"><label>图片尺寸</label><input name="image_size" type="text" value="${esc(s.image_size)}"></div><div class="field"><label>图片质量</label><input name="image_quality" type="text" value="${esc(s.image_quality)}"></div><div class="field"><label>图片审核模式 <span class="hint">自动 / 低误拦截</span></label><input name="image_moderation" type="text" value="${esc(s.image_moderation)}"></div><div class="field"><label>输出格式</label><select name="image_output_format"><option value="png" ${s.image_output_format==='png'?'selected':''}>PNG</option><option value="jpeg" ${s.image_output_format==='jpeg'?'selected':''}>JPEG</option></select></div><div class="field"><label>提示词 API 地址</label><input name="prompt_api_base_url" type="text" value="${esc(s.prompt_api_base_url)}"></div><div class="field"><label>提示词模型</label><input name="prompt_model" type="text" value="${esc(s.prompt_model)}"></div><div class="field"><label>提示词 API Key <span class="hint">${esc(s.prompt_key_masked||'未配置')}</span></label><input name="prompt_api_key" type="password" placeholder="留空保持不变"></div><div class="field"><label>并发数</label><input name="generation_concurrency" type="number" min="1" max="8" value="${esc(s.generation_concurrency)}"></div><div class="field"><label>API 超时（秒）</label><input name="api_timeout_seconds" type="number" min="10" value="${esc(s.api_timeout_seconds)}"></div><div class="field"><label>上传上限（MB）</label><input name="max_upload_mb" type="number" min="1" value="${esc(s.max_upload_mb)}"></div><div class="field full"><label class="task-option" style="display:flex;max-width:300px"><input name="mock_mode" type="checkbox" ${s.mock_mode?'checked':''}><span>模拟模式（不调用真实图片 API）</span></label></div></div>${renderPromptDesign(s)}<div class="form-actions"><button type="button" class="btn btn-light" data-action="home">返回项目</button><button class="btn btn-primary" type="submit">保存设置</button></div></form>`; }
+    function addExtra() { const list=$('#extra-list'); if(!list) return; const index=list.children.length; const row=document.createElement('div'); row.className='extra-row'; row.innerHTML=`<div class="extra-num">${index+1}</div><div class="extra-fields"><input class="extra-files" data-index="${index}" type="file" accept=".jpg,.jpeg,.png,.webp" multiple><textarea class="extra-requirement">参考上传的额外图片进行构图与氛围迁移，保持产品外观、颜色、比例和细节不变。</textarea></div><button type="button" class="remove-extra" data-action="remove-extra" title="删除">×</button>`; list.appendChild(row); }
+    async function submitProject(form) { const fd=new FormData(form); const selected=$$('input[name=task_choice]:checked', form).map(x=>x.value); fd.set('enabled_tasks', JSON.stringify(selected)); const extras=[]; $$('.extra-row',form).forEach((row,i)=>{ const files=$('.extra-files',row); const key=`extra_${i}`; extras.push({upload_key:key, requirement:$('.extra-requirement',row).value}); [...(files.files||[])].forEach(file=>fd.append(key,file)); }); fd.set('extra_requests',JSON.stringify(extras)); const button=$('button[type=submit]',form); button.disabled=true; button.textContent='正在创建…'; try { const result=await api('/api/projects',{method:'POST',body:fd}); toast('项目已创建，生成任务已启动'); await openProject(result.id); } catch(e) { toast(e.message); button.disabled=false; button.textContent='开始生成'; } }
+    function projectStats(tasks) { return {total:tasks.length, ready:tasks.filter(t=>['ready','approved'].includes(t.status)).length, approved:tasks.filter(t=>t.status==='approved').length, failed:tasks.filter(t=>t.status==='failed').length, generating:tasks.filter(t=>['generating','queued'].includes(t.status)).length}; }
+     function taskLogic(task) { return task.prompt_group==='size' ? '尺寸展示' : task.prompt_group==='atmosphere' || task.prompt_group==='placement' ? '氛围摆放' : task.prompt_group==='scene' || task.prompt_group==='usage_scene' ? '使用场景' : '额外参考图'; }
+     function renderWorkspace() { const p=state.project; if(!p) return; const s=projectStats(p.tasks); $('#page-title').textContent=p.product_name; $('#page-subtitle').textContent=`项目创建于 ${date(p.created_at)} · ${p.status}`; renderSidebar(); const progress=s.total?Math.round(s.approved/s.total*100):0; const groups=[['尺寸展示',p.tasks.filter(t=>taskLogic(t)==='尺寸展示')],['氛围摆放',p.tasks.filter(t=>taskLogic(t)==='氛围摆放')],['使用场景',p.tasks.filter(t=>taskLogic(t)==='使用场景')],['额外参考图',p.tasks.filter(t=>taskLogic(t)==='额外参考图')]].filter(([,tasks])=>tasks.length); $('#view').innerHTML=`<div class="panel"><div class="workspace-head"><div><div class="eyebrow">PROJECT WORKSPACE</div><h2>${esc(p.product_name)}</h2><p>${esc(p.product_description||'未填写产品描述')} · 每张图独立生成完整中文描述词</p></div><div class="head-actions"><button class="btn btn-light" data-action="refresh">刷新状态</button><button class="btn btn-ghost" data-action="refresh-prompts">重新分析全部描述词</button>${s.failed?'<button class="btn btn-danger" data-action="retry-failed">批量重试失败</button>':''}<a class="btn btn-ghost" href="/api/export?project=${encodeURIComponent(p.id)}">导出最终图</a><button class="btn btn-danger" data-action="delete-project">删除项目</button></div></div><div class="stats"><div class="stat"><b>${s.total}</b><span>任务总数</span></div><div class="stat"><b>${s.ready}</b><span>已生成</span></div><div class="stat"><b>${s.approved}</b><span>已确认</span></div><div class="stat"><b>${s.generating}</b><span>生成中</span></div><div class="stat"><b>${s.failed}</b><span>失败</span></div></div><div class="progress-line"><i style="width:${progress}%"></i></div><p>${progress}% 已确认 · 每张图均单独保存完整提示词和版本记录</p><div class="ref-strip"><img class="ref-thumb" src="${fileUrl(p.id,p.input_product_path)}"><div><h3>stt 手托比例参考图</h3><p>${p.is_series?'系列品：只锁定手与产品的真实大小比例，不参与产品外观判断。':'单品：同时锁定产品外观和手与产品的真实大小比例。'}</p></div></div>${p.is_series&&p.input_series_path?'<div class="ref-strip"><img class="ref-thumb" src="'+fileUrl(p.id,p.input_series_path)+'"><div><h3>cpt 系列外观参考图</h3><p>系列品的唯一产品外观锚点。</p></div></div>':''}</div>${groups.map(([name,tasks])=>`<section class="logic-section"><h3>${name} <span class="hint">${tasks.length} 张</span></h3><div class="task-grid">${tasks.map(renderTaskCard).join('')}</div></section>`).join('')}`; }
+     function renderTaskCard(task) { const versions=task.versions||[]; const latest=versions.length?versions[versions.length-1].id:''; const defaultVersion=task.status==='approved'?task.selected_version_id:latest; const selected=state.viewVersions[task.id] || defaultVersion; const version=versions.find(v=>v.id===selected) || versions[versions.length-1]; const busy=['queued','generating'].includes(task.status); const img=version?`<img src="${fileUrl(state.project.id,version.file_path)}&v=${encodeURIComponent(version.created_at)}" alt="${esc(task.task_name)}">`:'<div class="image-placeholder">等待生成第一版图片</div>'; const statusText={queued:'排队中',generating:'生成中',ready:'待审核',approved:'已确认',failed:'失败',pending:'待处理'}[task.status]||task.status; return `<article class="task-card ${task.task_kind==='extra'?'extra':''}" data-task="${task.id}"><div class="card-top"><h3><span class="task-id">${esc(task.slot_id)}</span>${esc(task.task_name)} <span class="hint">· ${taskLogic(task)}</span></h3><span class="status ${task.status}">${statusText}</span></div><div class="image-box">${img}</div><div class="card-body"><div class="version-row"><span>${version?`当前查看：v${String(version.version_number).padStart(2,'0')} · ${esc(version.mode)}`:'暂无版本'}</span>${versions.length?`<select class="version-select" data-action="view-version">${versions.map(v=>`<option value="${v.id}" ${v.id===selected?'selected':''}>v${String(v.version_number).padStart(2,'0')} · ${v.mode}${v.is_approved?' · 已确认':''}</option>`).join('')}</select>`:''}</div><textarea class="prompt-input" placeholder="完整中文描述词">${esc(task.current_prompt||'')}</textarea><textarea class="edit-input edit-box" placeholder="局部修改要求，例如：将产品缩小 15%，保持其他内容不变"></textarea><div class="card-actions"><button class="btn btn-primary" data-action="regenerate" ${busy?'disabled':''}>修改描述词重新生成</button><button class="btn btn-ghost" data-action="edit" ${busy||!version?'disabled':''}>直接编辑当前图片</button><button class="btn btn-light" data-action="approve" ${busy||!version?'disabled':''}>确认当前版本</button><button class="btn btn-light" data-action="download" ${!version?'disabled':''}>下载</button>${task.status==='failed'?'<button class="btn btn-danger" data-action="retry">重试</button>':''}</div>${task.last_error?`<div class="error">${esc(task.last_error)}</div>`:''}<div class="card-foot">${versions.length?`历史版本 ${versions.length} 个 · 父版本链可追溯`:'尚未产生版本'}${task.task_kind==='extra'?' · 本图来自额外参考图需求':''}</div></div></article>`; }
+    async function openProject(id) { clearInterval(state.poll); state.project=await api(`/api/projects/${id}`); renderWorkspace(); state.poll=setInterval(async()=>{ if(!state.project) return; try { state.project=await api(`/api/projects/${state.project.id}`); renderWorkspace(); } catch(e){} },2200); }
+     async function act(action, card) { const taskId=card.dataset.task; const task=state.project.tasks.find(t=>t.id===taskId); try { if(action==='regenerate') { delete state.viewVersions[taskId]; await api(`/api/tasks/${taskId}/regenerate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:$('.prompt-input',card).value})}); toast('已提交重新生成'); } if(action==='edit') { delete state.viewVersions[taskId]; await api(`/api/tasks/${taskId}/edit`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({change_request:$('.edit-input',card).value})}); toast('已提交局部编辑'); } if(action==='approve') { const select=$('.version-select',card); await api(`/api/tasks/${taskId}/approve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({version_id:select.value})}); toast('已确认当前版本'); } if(action==='retry') { delete state.viewVersions[taskId]; await api(`/api/tasks/${taskId}/retry`,{method:'POST'}); toast('已重新排队'); } if(action==='download') { const select=$('.version-select',card); const version=(task.versions||[]).find(v=>v.id===(select?.value||task.selected_version_id)) || task.versions[task.versions.length-1]; if(version) window.open(fileUrl(state.project.id,version.file_path),'_blank'); } } catch(e){toast(e.message);} }
+     async function refreshPrompts(button) { if(!state.project) return; button.disabled=true; button.textContent='分析中…'; try { await api(`/api/projects/${state.project.id}/refresh-prompts`,{method:'POST'}); state.project=await api(`/api/projects/${state.project.id}`); renderWorkspace(); toast('已为每一张图重新生成独立中文描述词'); } catch(e) { toast(e.message); button.disabled=false; button.textContent='重新分析全部描述词'; } }
+     async function retryFailed(button) { if(!state.project) return; button.disabled=true; button.textContent='重新生成中…'; try { await api(`/api/projects/${state.project.id}/retry-failed`,{method:'POST'}); toast('失败任务已批量重新排队'); } catch(e) { toast(e.message); button.disabled=false; button.textContent='批量重试失败'; } }
+     async function submitSettings(form) { const task_briefs={}; $$('.settings-task',form).forEach(el=>task_briefs[el.dataset.taskId]=el.value); const group_constraints={}; $$('.group-constraint',form).forEach(el=>group_constraints[el.dataset.group]=el.value); const payload={output_root:$('[name=output_root]',form).value,image_api_base_url:$('[name=image_api_base_url]',form).value,image_api_key:$('[name=image_api_key]',form).value,image_model:$('[name=image_model]',form).value,image_size:$('[name=image_size]',form).value,image_quality:$('[name=image_quality]',form).value,image_moderation:$('[name=image_moderation]',form).value,image_output_format:$('[name=image_output_format]',form).value,prompt_api_base_url:$('[name=prompt_api_base_url]',form).value,prompt_api_key:$('[name=prompt_api_key]',form).value,prompt_model:$('[name=prompt_model]',form).value,generation_concurrency:$('[name=generation_concurrency]',form).value,api_timeout_seconds:$('[name=api_timeout_seconds]',form).value,max_upload_mb:$('[name=max_upload_mb]',form).value,mock_mode:$('[name=mock_mode]',form).checked,runtime:{group_constraints,task_briefs}}; const button=$('button[type=submit]',form); button.disabled=true; button.textContent='保存中…'; try { await api('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); toast('设置已保存并立即生效'); await showSettings(); } catch(e) { toast(e.message); button.disabled=false; button.textContent='保存设置'; } }
+    $('#top-new').onclick=showNew; $('#side-new').onclick=showNew; $('#side-settings').onclick=showSettings;
+     document.addEventListener('click', async e=>{ const open=e.target.closest('[data-open]'); if(open) return openProject(open.dataset.open); const btn=e.target.closest('[data-action]'); if(!btn) return; const action=btn.dataset.action; if(action==='prompt-tab') { const section=btn.closest('.section'); $$('.logic-tab',section).forEach(el=>el.classList.toggle('active',el.dataset.group===btn.dataset.group)); $$('.constraint-panel',section).forEach(el=>el.classList.toggle('active',el.dataset.promptPanel===btn.dataset.group)); return; } if(action==='new') return showNew(); if(action==='home') { state.project=null; renderSidebar(); showEmpty(); return; } if(action==='add-extra') return addExtra(); if(action==='remove-extra') { btn.closest('.extra-row').remove(); $$('.extra-row').forEach((row,i)=>$('.extra-num',row).textContent=i+1); return; } if(action==='toggle-tasks') { const boxes=$$('input[name=task_choice]'); const all=boxes.every(x=>x.checked); boxes.forEach(x=>x.checked=!all); return; } if(action==='refresh' && state.project) { state.project=await api(`/api/projects/${state.project.id}`); renderWorkspace(); return; } if(action==='refresh-prompts') return refreshPrompts(btn); if(action==='retry-failed') return retryFailed(btn); if(action==='delete-project' && state.project && confirm('确定软删除这个项目吗？图片不会立即清理。')) { await api(`/api/projects/${state.project.id}`,{method:'DELETE'}); toast('项目已移入回收状态'); state.project=null; await loadProjects(); showEmpty(); return; } const card=btn.closest('[data-task]'); if(card && ['regenerate','edit','approve','retry','download'].includes(action)) return act(action,card); });
+    document.addEventListener('change', e=>{ if(e.target.matches('[name="is_series"]')) { const input=$('[name="series_image"]',e.target.form); const hint=$('.series-reference-hint',e.target.form); const series=e.target.value==='1'; if(input) input.required=series; if(hint) hint.textContent=series?'系列品必填；锁定具体产品外观':'单品不使用；系列品必填并锁定具体产品外观'; } if(e.target.matches('[data-action="view-version"]')) { state.viewVersions[e.target.closest('[data-task]').dataset.task]=e.target.value; renderWorkspace(); } });
+    document.addEventListener('submit', e=>{ if(e.target.id==='project-form'){e.preventDefault(); submitProject(e.target);} if(e.target.id==='settings-form'){e.preventDefault(); submitSettings(e.target);} });
+    (async()=>{ try { await loadProjects(); if(state.projects.length) await openProject(state.projects[0].id); else showEmpty(); } catch(e){toast(e.message);} })();
+  </script>
+</body>
+</html>
