@@ -224,9 +224,12 @@ def test_local_prompts_keep_three_logics_and_one_prompt_per_image(tmp_path: Path
     assert "所有人物均设定为美国人" in prompts["07"]
     assert "仅允许长、宽、高三根尺寸线" in prompts["13"]
     assert not any(re.search(r"[A-Za-z]", value) for key, value in prompts.items() if key != "13")
-    size_without_allowed_labels = prompts["13"].replace("PRODUCT SIZE", "").replace("cm", "").replace("inch", "")
+    size_without_allowed_labels = prompts["13"]
+    for label in ("PRODUCT SIZE", "LENGTH", "WIDTH", "HEIGHT", "cm", "inch"):
+        size_without_allowed_labels = size_without_allowed_labels.replace(label, "")
     assert not re.search(r"[A-Za-z]", size_without_allowed_labels)
-    assert all(label in prompts["13"] for label in ("PRODUCT SIZE", "cm", "inch"))
+    assert all(label in prompts["13"] for label in ("PRODUCT SIZE", "LENGTH", "WIDTH", "HEIGHT", "cm", "inch"))
+    assert "最终成图中所有可见文字必须全部使用英文" in service.function_templates()[0]["prompt"]
     definitions = service.task_definitions()
     assert {item["logic"] for item in definitions} == {"氛围摆放", "使用场景", "功能图"}
 

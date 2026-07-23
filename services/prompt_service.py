@@ -203,8 +203,11 @@ class PromptService:
     def _normalize_chinese_prompt(value: Any, allow_size_labels: bool = False) -> str:
         text = str(value or "")
         if allow_size_labels:
-            # 尺寸图的画面文字明确要求保留这三个英文标签；其余英文仍会被清理。
+            # 尺寸图只保留最终画面允许出现的英文标签；其余英文说明仍会被清理。
             text = re.sub(r"(?i)PRODUCT\s+SIZE", "【保留产品尺寸英文图标】", text)
+            text = re.sub(r"(?i)(?<![A-Za-z])LENGTH(?![A-Za-z])", "【保留长度英文标签】", text)
+            text = re.sub(r"(?i)(?<![A-Za-z])WIDTH(?![A-Za-z])", "【保留宽度英文标签】", text)
+            text = re.sub(r"(?i)(?<![A-Za-z])HEIGHT(?![A-Za-z])", "【保留高度英文标签】", text)
             text = re.sub(r"(?i)(?<![A-Za-z])cm(?![A-Za-z])", "【保留厘米英文标签】", text)
             text = re.sub(r"(?i)(?<![A-Za-z])(?:inches|inch)(?![A-Za-z])", "【保留英寸英文标签】", text)
         replacements = (
@@ -225,6 +228,9 @@ class PromptService:
         text = re.sub(r"[A-Za-z]+", "", text)
         if allow_size_labels:
             text = text.replace("【保留产品尺寸英文图标】", "PRODUCT SIZE")
+            text = text.replace("【保留长度英文标签】", "LENGTH")
+            text = text.replace("【保留宽度英文标签】", "WIDTH")
+            text = text.replace("【保留高度英文标签】", "HEIGHT")
             text = text.replace("【保留厘米英文标签】", "cm")
             text = text.replace("【保留英寸英文标签】", "inch")
         return re.sub(r"[ \t]{2,}", " ", text)
@@ -361,6 +367,7 @@ class PromptService:
         definition = {
             "id": "99",
             "name": str(template.get("name") or "追加功能图"),
+            "template_id": str(template.get("id") or ""),
             "prompt_group": "function",
             "logic": "功能图",
             "reference_fields": ["stt", "cpt"],
@@ -412,22 +419,44 @@ class PromptService:
         prompt_group = str(items[0]["prompt_group"]) if items else "atmosphere"
         selected_template = self.config_store.function_template(project.get("size_template_id")) if prompt_group == "size" else None
         template_mode = prompt_group in {"size", "function"}
+        is_size_template = bool(
+            (selected_template and selected_template.get("id") == "size-01")
+            or any(item.get("template_id") == "size-01" for item in items)
+        )
 
         def selected_requirement(item: dict[str, Any]) -> str:
             if selected_template:
                 return str(selected_template["prompt"])
             return str(item["brief"])
 
-        output_requirement = (
-            "必须按照当前功能图模板生成一条独立、完整、可直接用于图片生成的描述词。只返回JSON对象，键必须是两位任务编号，"
-            "描述词主体必须使用中文；模板明确要求画面显示的英文标题、单位或标签可以原样保留，除此之外不要夹带英文说明。"
-            "不得输出Markdown、解释、备注或编号标签。严禁描述、猜测或创造产品的颜色、造型、图案、结构、材质等外观细节，"
-            "只能指向对应参考图。必须在最终描述词中原样保留【产品外观参考图】和【手托比例参考图】标准标签，"
-            "禁止改写成随附图片、输入照片、上传图片、参考照片或类似泛化说法。参考图变量约束只用于理解输入图片角色，禁止复制内部规则标题。"
-            "单品的外观和比例都以手托比例参考图为准；系列品外观只能由系列外观参考图锚定，手托比例参考图只控制大小比例。"
-            if template_mode
-            else "必须为任务列表中的每一个编号分别生成一条独立、完整、可直接用于图片生成的中文描述词。绝对不能合并、跳过、复用或省略任何一张图。只返回JSON对象，键必须是两位任务编号，值必须是全中文描述词；单位写作厘米和英寸，不要使用英文字母，不要输出Markdown、解释、备注或编号标签。最终描述词必须原样保留该任务所需的【产品外观参考图】和【手托比例参考图】标准标签，禁止将标准标签改写成随附图片、输入照片、上传图片、参考照片或类似泛化说法。参考图变量约束只用于你理解输入图片角色，禁止把【参考图变量约束】标题或整段内部规则复制到输出描述词开头。每张图只能使用该任务自己的用户输入，严禁把其他图片类型或其他编号的用户输入混入本图。单品的外观和比例都以手托比例参考图为准；系列品的外观只能由系列外观参考图锚定，手托比例参考图只控制大小比例，不得覆盖外观。"
-        )
+        if is_size_template:
+            output_requirement = (
+                "必须按照当前尺寸图模板生成一条独立、完整、可直接用于图片生成的描述词。只返回JSON对象，键必须是两位任务编号。"
+                "描述词说明主体必须使用中文，但最终成图中的所有可见文字必须全部使用英文，严禁出现中文、汉字或中英混排；"
+                "画面文字只允许PRODUCT SIZE、LENGTH、WIDTH、HEIGHT、cm、inch以及尺寸数字，必须原样保留这些英文标签。"
+                "不得输出Markdown、解释、备注或编号标签。严禁描述、猜测或创造产品的颜色、造型、图案、结构、材质等外观细节，"
+                "只能指向对应参考图。必须在最终描述词中原样保留【产品外观参考图】和【手托比例参考图】标准标签，"
+                "禁止改写成随附图片、输入照片、上传图片、参考照片或类似泛化说法。参考图变量约束只用于理解输入图片角色，禁止复制内部规则标题。"
+                "单品的外观和比例都以手托比例参考图为准；系列品外观只能由系列外观参考图锚定，手托比例参考图只控制大小比例。"
+            )
+        elif template_mode:
+            output_requirement = (
+                "必须按照当前功能图模板生成一条独立、完整、可直接用于图片生成的描述词。只返回JSON对象，键必须是两位任务编号，"
+                "描述词主体必须使用中文；模板明确要求画面显示的英文标题、单位或标签可以原样保留，除此之外不要夹带英文说明。"
+                "不得输出Markdown、解释、备注或编号标签。严禁描述、猜测或创造产品的颜色、造型、图案、结构、材质等外观细节，"
+                "只能指向对应参考图。必须在最终描述词中原样保留【产品外观参考图】和【手托比例参考图】标准标签，"
+                "禁止改写成随附图片、输入照片、上传图片、参考照片或类似泛化说法。参考图变量约束只用于理解输入图片角色，禁止复制内部规则标题。"
+                "单品的外观和比例都以手托比例参考图为准；系列品外观只能由系列外观参考图锚定，手托比例参考图只控制大小比例。"
+            )
+        else:
+            output_requirement = (
+                "必须为任务列表中的每一个编号分别生成一条独立、完整、可直接用于图片生成的中文描述词。绝对不能合并、跳过、复用或省略任何一张图。"
+                "只返回JSON对象，键必须是两位任务编号，值必须是全中文描述词；单位写作厘米和英寸，不要使用英文字母，不要输出Markdown、解释、备注或编号标签。"
+                "最终描述词必须原样保留该任务所需的【产品外观参考图】和【手托比例参考图】标准标签，禁止将标准标签改写成随附图片、输入照片、上传图片、参考照片或类似泛化说法。"
+                "参考图变量约束只用于你理解输入图片角色，禁止把【参考图变量约束】标题或整段内部规则复制到输出描述词开头。每张图只能使用该任务自己的用户输入，"
+                "严禁把其他图片类型或其他编号的用户输入混入本图。单品的外观和比例都以手托比例参考图为准；"
+                "系列品的外观只能由系列外观参考图锚定，手托比例参考图只控制大小比例，不得覆盖外观。"
+            )
 
         instruction = {
             "分析参考图输入顺序": [
