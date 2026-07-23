@@ -406,6 +406,27 @@ class GenerationService:
         self._refresh_project_status(task["project_id"])
         self._write_manifest(task["project_id"])
 
+    def favorite(self, task_id: str, version_id: str, prompt: str = "") -> dict[str, str]:
+        project, task, project_dir = self._project_and_task(task_id)
+        versions = task.get("versions", [])
+        selected = next((version for version in versions if version["id"] == version_id), None)
+        if not selected:
+            raise ValueError("收藏版本不存在")
+        source_image = self.storage.resolve_relative(project_dir, selected["file_path"])
+        if not source_image.exists():
+            raise ValueError("收藏图片文件不存在")
+        visible_prompt = str(prompt or task.get("current_prompt") or selected.get("prompt") or "").strip()
+        if not visible_prompt:
+            raise ValueError("收藏描述词不能为空")
+        return self.storage.archive_favorite(
+            source_image,
+            project["product_name"],
+            task["slot_id"],
+            task["task_name"],
+            int(selected["version_number"]),
+            visible_prompt,
+        )
+
     def _refresh_project_status(self, project_id: str) -> None:
         tasks = self.repo.get_tasks(project_id)
         if not tasks:

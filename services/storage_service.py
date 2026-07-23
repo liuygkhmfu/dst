@@ -8,7 +8,7 @@ import shutil
 import tempfile
 import uuid
 import zipfile
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 
@@ -86,6 +86,42 @@ class StorageService:
 
     def write_manifest(self, project_dir: Path, manifest: dict) -> None:
         self.atomic_write(project_dir / "project_manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8"))
+
+    def archive_favorite(
+        self,
+        source_image: Path,
+        product_name: str,
+        slot_id: str,
+        task_name: str,
+        version_number: int,
+        prompt: str,
+    ) -> dict[str, str]:
+        archive_dir = (self.output_root / "优质存档").resolve()
+        self._assert_inside(archive_dir, self.output_root)
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        stem = "_".join(
+            [
+                safe_name(product_name, "product"),
+                safe_name(slot_id, "task"),
+                safe_name(task_name, "image"),
+                f"v{int(version_number):02d}",
+                timestamp,
+            ]
+        )
+        image_target = archive_dir / f"{stem}{source_image.suffix.lower()}"
+        prompt_target = archive_dir / f"{stem}_描述词.txt"
+        if image_target.exists() or prompt_target.exists():
+            unique = uuid.uuid4().hex[:6]
+            image_target = archive_dir / f"{stem}_{unique}{source_image.suffix.lower()}"
+            prompt_target = archive_dir / f"{stem}_{unique}_描述词.txt"
+        shutil.copy2(source_image, image_target)
+        self.atomic_write(prompt_target, str(prompt or "").strip().encode("utf-8"))
+        return {
+            "archive_dir": str(archive_dir),
+            "image_path": str(image_target),
+            "prompt_path": str(prompt_target),
+        }
 
     def export_final_zip(self, project_dir: Path, files: list[Path]) -> Path:
         target = project_dir / f"{safe_name(project_dir.name)}_final.zip"

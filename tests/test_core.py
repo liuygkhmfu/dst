@@ -84,6 +84,36 @@ def test_extra_reference_request_creates_independent_task(tmp_path: Path):
     assert "输入参考图2＝【额外需求参考图1】" in extra_task["versions"][0]["prompt"]
 
 
+def test_favorite_archives_selected_image_and_visible_prompt(tmp_path: Path):
+    from services.generation_service import GenerationService
+
+    settings = replace(
+        get_settings(tmp_path),
+        data_dir=tmp_path / "data",
+        output_root=tmp_path / "outputs",
+        db_path=tmp_path / "data" / "app.db",
+        prompt_api_key="",
+        mock_mode=True,
+    )
+    repo = Repository(Database(settings.db_path))
+    service = GenerationService(settings, repo, StorageService(settings.output_root))
+    product = {"filename": "product.png", "content": make_mock_png("product"), "content_type": "image/png"}
+    project_id = service.create_project({"product_name": "收藏测试", "enabled_tasks": '["03"]'}, product, None, {})
+    service._run_initial(project_id)
+    task = repo.get_tasks(project_id)[0]
+    version = task["versions"][0]
+    project = repo.get_project(project_id)
+    source_bytes = service.storage.resolve_relative(Path(project["output_dir"]), version["file_path"]).read_bytes()
+
+    archived = service.favorite(task["id"], version["id"], "这是用户当前看到并收藏的完整描述词。")
+
+    image_path = Path(archived["image_path"])
+    prompt_path = Path(archived["prompt_path"])
+    assert image_path.parent.name == "优质存档"
+    assert image_path.read_bytes() == source_bytes
+    assert prompt_path.read_text(encoding="utf-8") == "这是用户当前看到并收藏的完整描述词。"
+
+
 def test_regenerate_persists_edited_prompt_before_background_generation(tmp_path: Path, monkeypatch):
     from services.generation_service import GenerationService
 

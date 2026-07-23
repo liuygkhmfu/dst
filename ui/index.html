@@ -95,6 +95,10 @@
     .status.generating, .status.queued { background:#fff2dc; color:#a36724; }
     .status.ready, .status.approved { background:#e0f3ec; color:#2d7867; }
     .status.failed { background:#fff0f0; color:var(--danger); }
+    .card-top-actions { display:flex; align-items:center; gap:7px; flex-shrink:0; }
+    .favorite-btn { border:1px solid #e7d8a7; border-radius:99px; padding:4px 9px; color:#926f16; background:#fffaf0; font-size:10px; font-weight:800; white-space:nowrap; }
+    .favorite-btn:hover:not(:disabled) { color:#6f5105; background:#fff1c7; }
+    .favorite-btn:disabled { opacity:.55; cursor:not-allowed; }
     .image-box { background:#f1f3f2; aspect-ratio:1/1; display:grid; place-items:center; overflow:hidden; }
     .image-box img { width:100%; height:100%; object-fit:cover; display:block; }
     .image-placeholder { color:var(--muted); font-size:12px; padding:20px; text-align:center; }
@@ -294,14 +298,61 @@
         if(el.textContent.trim()==='· 尺寸展示') el.textContent='· 功能图';
       });
     }
+    function ensureFavoriteButtons() {
+      $$('.task-card').forEach(card=>{
+        if($('.favorite-btn',card)) return;
+        const top=$('.card-top',card);
+        const status=$('.status',top);
+        if(!top || !status) return;
+        const actions=document.createElement('div');
+        actions.className='card-top-actions';
+        const button=document.createElement('button');
+        button.type='button';
+        button.className='favorite-btn';
+        button.dataset.action='favorite';
+        button.textContent='☆ 收藏';
+        button.title='将当前版本图片和描述词保存到优质存档';
+        button.disabled=!$('.version-select',card);
+        status.replaceWith(actions);
+        actions.append(button,status);
+      });
+    }
+    async function favoriteTask(button) {
+      const card=button.closest('[data-task]');
+      const versionId=$('.version-select',card)?.value;
+      if(!card || !versionId) return toast('当前图片还没有可收藏版本');
+      const prompt=$('.prompt-input',card)?.value||'';
+      button.disabled=true;
+      button.textContent='收藏中…';
+      try {
+        await api(`/api/tasks/${card.dataset.task}/favorite`,{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({version_id:versionId,prompt})
+        });
+        button.textContent='★ 已收藏';
+        toast('图片和描述词已保存到输出路径的“优质存档”文件夹');
+      } catch(e) {
+        button.disabled=false;
+        button.textContent='☆ 收藏';
+        toast(e.message);
+      }
+    }
     const projectViewObserver=new MutationObserver(()=>{
       ensureNewProjectEnhancements().catch(e=>toast(e.message));
       ensureWorkspaceFunctionLabels();
+      ensureFavoriteButtons();
     });
     projectViewObserver.observe($('#view'),{childList:true,subtree:true});
     document.addEventListener('click', e=>{
       const btn=e.target.closest?.('[data-action]');
       if(!btn) return;
+      if(btn.dataset.action==='favorite') {
+        e.preventDefault();
+        e.stopPropagation();
+        favoriteTask(btn);
+        return;
+      }
       if(btn.dataset.action==='add-function') addFunctionRequest();
       if(btn.dataset.action==='remove-function') {
         btn.closest('.function-request-row')?.remove();

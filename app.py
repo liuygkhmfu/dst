@@ -341,6 +341,14 @@ class Handler(BaseHTTPRequestHandler):
                     GENERATOR.edit(task_id, str(payload.get("change_request", "")))
                 elif action == "approve":
                     GENERATOR.approve(task_id, str(payload.get("version_id", "")))
+                elif action == "favorite":
+                    archived = GENERATOR.favorite(
+                        task_id,
+                        str(payload.get("version_id", "")),
+                        str(payload.get("prompt", "")),
+                    )
+                    self.send_json({"ok": True, **archived})
+                    return
                 elif action == "retry":
                     GENERATOR.retry(task_id)
                 else:
