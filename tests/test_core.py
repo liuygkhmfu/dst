@@ -45,6 +45,7 @@ def test_database_persists_project(tmp_path: Path):
     row = {"id":"p1","product_name":"demo","product_description":"","is_series":0,"product_count":1,"custom_scene":"","display_requirements":"","product_dimensions":"","input_product_path":"input/a.png","input_series_path":None,"output_dir":str(tmp_path),"status":"created","created_at":"now","updated_at":"now"}
     repo.create_project(row)
     assert repo.get_project("p1")["product_name"] == "demo"
+    assert repo.get_project("p1")["size_template_id"] == "size-01"
 
 
 def test_extra_reference_request_creates_independent_task(tmp_path: Path):
@@ -73,6 +74,35 @@ def test_extra_reference_request_creates_independent_task(tmp_path: Path):
     assert [item["label"] for item in extra_usage["reference_inputs"]] == ["手托比例参考图", "额外需求参考图1"]
     assert "输入参考图1＝【手托比例参考图】" in extra_task["versions"][0]["prompt"]
     assert "输入参考图2＝【额外需求参考图1】" in extra_task["versions"][0]["prompt"]
+
+
+def test_regenerate_persists_edited_prompt_before_background_generation(tmp_path: Path, monkeypatch):
+    from services.generation_service import GenerationService
+
+    settings = get_settings(tmp_path)
+    settings = replace(settings, data_dir=tmp_path / "data", output_root=tmp_path / "outputs", db_path=tmp_path / "data" / "app.db", mock_mode=True)
+    repo = Repository(Database(settings.db_path))
+    service = GenerationService(settings, repo, StorageService(settings.output_root))
+    product = {"filename": "product.png", "content": make_mock_png("product"), "content_type": "image/png"}
+    project_id = service.create_project({"product_name": "demo", "enabled_tasks": '["03"]'}, product, None, {})
+    task = repo.get_tasks(project_id)[0]
+    started: list[tuple] = []
+
+    class FakeThread:
+        def __init__(self, target, args, daemon):
+            self.target = target
+            self.args = args
+            self.daemon = daemon
+
+        def start(self):
+            started.append(self.args)
+
+    monkeypatch.setattr("services.generation_service.threading.Thread", FakeThread)
+    service.regenerate(task["id"], "用户刚刚修改的新描述词")
+    updated = repo.get_task(task["id"])
+    assert updated["current_prompt"] == "用户刚刚修改的新描述词"
+    assert updated["status"] == "queued"
+    assert started == [(task["id"], "regenerate", "用户刚刚修改的新描述词", "")]
 
 
 def test_series_uses_cpt_for_appearance_and_stt_only_for_scale(tmp_path: Path):
@@ -113,13 +143,18 @@ def test_series_project_requires_cpt_reference(tmp_path: Path):
 
 def test_runtime_config_overrides_task_brief(tmp_path: Path):
     store = RuntimeConfigStore(tmp_path / "data")
-    store.save(group_constraints={"atmosphere": "摆放图专属约束。"}, task_briefs={"03": "A custom placement direction."})
+    store.save(
+        group_constraints={"atmosphere": "摆放图专属约束。"},
+        task_briefs={"03": "A custom placement direction."},
+        size_templates=[{"id": "size-01", "name": "模板1", "prompt": "尺寸模板要求：{{产品尺寸}}，外观参考{{产品外观参考图}}，比例参考{{手托比例参考图}}。"}],
+    )
     definitions = store.task_definitions()
     task_03 = next(item for item in definitions if item["id"] == "03")
     task_04 = next(item for item in definitions if item["id"] == "04")
     assert store.constraint_for("atmosphere") == "摆放图专属约束。"
     assert store.constraint_for("scene") != "摆放图专属约束。"
-    assert set(store.group_constraints()) == {"size", "atmosphere", "scene"}
+    assert set(store.group_constraints()) == {"atmosphere", "scene"}
+    assert store.size_template("size-01")["name"] == "模板1"
     assert task_03["brief"] == "A custom placement direction."
     assert task_04["brief"] != "A custom placement direction."
 
@@ -132,6 +167,7 @@ def test_local_prompts_keep_three_logics_and_one_prompt_per_image(tmp_path: Path
         "display_requirements": "一个产品放在浅色托盘上",
         "custom_scene": "窗边书桌上的日常使用场景",
         "product_dimensions": "6 x 5 x 3 cm",
+        "size_template_id": "size-01",
     }
     prompts = service.build_local_prompts(project)
     assert set(prompts) == {"03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13"}
@@ -143,11 +179,14 @@ def test_local_prompts_keep_three_logics_and_one_prompt_per_image(tmp_path: Path
     assert all("{{" not in value and "}}" not in value for value in prompts.values())
     assert "一个产品放在浅色托盘上" in prompts["03"]
     assert "窗边书桌上的日常使用场景" in prompts["11"]
-    assert "6 × 5 × 3 厘米" in prompts["13"]
+    assert "6 × 5 × 3 cm" in prompts["13"]
     assert "不得出现人物、手部或任何人体特征" in prompts["03"]
     assert "所有人物均设定为美国人" in prompts["07"]
-    assert "必须恰好使用长、宽、高三根" in prompts["13"]
-    assert not any(re.search(r"[A-Za-z]", value) for value in prompts.values())
+    assert "仅允许长、宽、高三根尺寸线" in prompts["13"]
+    assert not any(re.search(r"[A-Za-z]", value) for key, value in prompts.items() if key != "13")
+    size_without_allowed_labels = prompts["13"].replace("PRODUCT SIZE", "").replace("cm", "").replace("inch", "")
+    assert not re.search(r"[A-Za-z]", size_without_allowed_labels)
+    assert all(label in prompts["13"] for label in ("PRODUCT SIZE", "cm", "inch"))
     definitions = service.task_definitions()
     assert {item["logic"] for item in definitions} == {"氛围摆放", "使用场景", "尺寸展示"}
 
@@ -185,6 +224,71 @@ def test_prompt_model_is_called_separately_for_three_workflow_groups(tmp_path: P
     prompts = service.generate_prompts({}, image_path)
     assert set(prompts) == {"03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13"}
     assert calls == [["03", "04", "05", "06"], ["07", "08", "09", "10", "11", "12"], ["13"]]
+
+
+def test_selected_size_template_is_the_only_size_prompt_requirement(tmp_path: Path):
+    settings = replace(get_settings(tmp_path), data_dir=tmp_path / "data")
+    store = RuntimeConfigStore(settings.data_dir)
+    store.save(
+        size_templates=[
+            {"id": "size-01", "name": "模板1", "prompt": "第一套尺寸要求：{{产品尺寸}}，参考{{产品外观参考图}}。"},
+            {"id": "size-02", "name": "模板2", "prompt": "第二套尺寸要求：尺寸为{{产品尺寸}}，外观看{{产品外观参考图}}，比例看{{手托比例参考图}}。"},
+        ]
+    )
+    service = PromptService(settings, store)
+    prompt = service.build_local_prompts(
+        {"size_template_id": "size-02", "product_dimensions": "8 x 6 x 4 cm"},
+        ["13"],
+    )["13"]
+    assert prompt.startswith("第二套尺寸要求")
+    assert "8 × 6 × 4 cm" in prompt
+    assert "第一套尺寸要求" not in prompt
+    assert "{{" not in prompt
+
+
+def test_selected_size_template_is_sent_to_gpt_without_size_global_or_task_brief(tmp_path: Path, monkeypatch):
+    settings = replace(
+        get_settings(tmp_path),
+        data_dir=tmp_path / "data",
+        prompt_api_base_url="https://example.test",
+        prompt_api_key="test-key",
+        prompt_model="gpt-5.5",
+    )
+    store = RuntimeConfigStore(settings.data_dir)
+    store.save(size_templates=[{"id": "size-02", "name": "自定义尺寸模板", "prompt": "只按这套尺寸要求生成：{{产品尺寸}}，参考{{手托比例参考图}}。"}])
+    service = PromptService(settings, store)
+    image_path = tmp_path / "product.png"
+    image_path.write_bytes(make_mock_png("product"))
+    captured: dict = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps({"choices": [{"message": {"content": '{"13":"完整中文尺寸图描述词"}'}}]}).encode("utf-8")
+
+    def fake_urlopen(request, timeout):
+        captured["body"] = json.loads(request.data.decode("utf-8"))
+        captured["timeout"] = timeout
+        return FakeResponse()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    definitions = service.task_definitions()
+    service._request_prompts(
+        {"size_template_id": "size-02", "product_dimensions": "8 x 6 x 4 cm"},
+        [{"path": image_path, "label": "手托比例参考图", "purpose": "锚定外观与比例"}],
+        definitions,
+        ["13"],
+    )
+    instruction = json.loads(captured["body"]["messages"][0]["content"][0]["text"])
+    assert instruction["任务"][0]["内置描述词模板"].startswith("只按这套尺寸要求生成")
+    assert "8 x 6 x 4 cm" in instruction["任务"][0]["渲染后的内置要求"]
+    assert instruction["本类型专属全局规则模板"] == "尺寸图不使用额外全局约束"
+    assert "独立生成尺寸图" not in instruction["任务"][0]["内置描述词模板"]
 
 
 def test_each_workflow_task_receives_only_its_relevant_user_inputs(tmp_path: Path):
@@ -227,7 +331,7 @@ def test_workflow_placeholders_render_actual_values_and_keep_unknowns_visible(tm
     raw_definitions = service.task_definitions()
     assert "{{摆放展示要求}}" in next(item for item in raw_definitions if item["id"] == "03")["brief"]
     assert "{{自定义使用场景}}" in next(item for item in raw_definitions if item["id"] == "11")["brief"]
-    assert "{{产品尺寸}}" in next(item for item in raw_definitions if item["id"] == "13")["brief"]
+    assert "{{产品尺寸}}" in service.size_templates()[0]["prompt"]
 
 
 def test_analysis_reference_order_matches_single_and_series_rules(tmp_path: Path):

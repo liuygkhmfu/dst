@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS projects (
     custom_scene TEXT NOT NULL DEFAULT '',
     display_requirements TEXT NOT NULL DEFAULT '',
     product_dimensions TEXT NOT NULL DEFAULT '',
+    size_template_id TEXT NOT NULL DEFAULT 'size-01',
     input_product_path TEXT NOT NULL,
     input_series_path TEXT,
     output_dir TEXT NOT NULL,
@@ -110,6 +111,9 @@ class Database:
     def initialize(self) -> None:
         with self.connection() as conn:
             conn.executescript(SCHEMA)
+            project_columns = {row["name"] for row in conn.execute("PRAGMA table_info(projects)")}
+            if "size_template_id" not in project_columns:
+                conn.execute("ALTER TABLE projects ADD COLUMN size_template_id TEXT NOT NULL DEFAULT 'size-01'")
 
     @staticmethod
     def one(row: sqlite3.Row | None) -> dict[str, Any] | None:

@@ -52,7 +52,8 @@ def project_payload(project_id: str) -> dict:
     if not project:
         raise KeyError("项目不存在")
     tasks = [clean_task(t) for t in REPO.get_tasks(project_id)]
-    return {**project, "tasks": tasks, "extra_requests": REPO.get_extra_requests(project_id)}
+    size_template = GENERATOR.config_store.size_template(project.get("size_template_id"))
+    return {**project, "size_template_name": size_template["name"], "tasks": tasks, "extra_requests": REPO.get_extra_requests(project_id)}
 
 
 def masked_secret(value: str) -> str:
@@ -90,6 +91,7 @@ def settings_payload() -> dict:
         "image_key_masked": masked_secret(SETTINGS.image_api_key),
         "prompt_key_masked": masked_secret(SETTINGS.prompt_api_key),
         "group_constraints": GENERATOR.config_store.group_constraints(),
+        "size_templates": GENERATOR.config_store.size_templates(),
         "prompt_groups": [
             {"key": key, **PROMPT_GROUPS[key]}
             for key in ("size", "atmosphere", "scene")
@@ -146,8 +148,13 @@ def apply_settings(payload: dict) -> dict:
     runtime = payload.get("runtime", {}) if isinstance(payload.get("runtime"), dict) else payload
     task_briefs = runtime.get("task_briefs")
     group_constraints = runtime.get("group_constraints")
-    if task_briefs is not None or group_constraints is not None:
-        GENERATOR.config_store.save(group_constraints=group_constraints, task_briefs=task_briefs)
+    size_templates = runtime.get("size_templates")
+    if task_briefs is not None or group_constraints is not None or size_templates is not None:
+        GENERATOR.config_store.save(
+            group_constraints=group_constraints,
+            task_briefs=task_briefs,
+            size_templates=size_templates,
+        )
     SETTINGS = get_settings(ROOT)
     STORAGE = StorageService(SETTINGS.output_root)
     GENERATOR.storage = STORAGE

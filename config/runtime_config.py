@@ -11,7 +11,8 @@ from config.task_definitions import TASK_DEFINITIONS
 PROMPT_GROUPS: dict[str, dict[str, str]] = {
     "size": {
         "label": "尺寸图",
-        "description": "手持比例、三根尺寸线、厘米/英寸标注与尺寸主题排版。",
+        "description": "选择一个完整尺寸图模板作为 GPT-5.5 的描述词生成要求，不与尺寸全局约束或图13单图要求拼接。",
+        "mode": "selected_template_analysis",
     },
     "atmosphere": {
         "label": "摆放图",
@@ -25,16 +26,6 @@ PROMPT_GROUPS: dict[str, dict[str, str]] = {
 
 
 DEFAULT_GROUP_CONSTRAINTS: dict[str, str] = {
-    "size": (
-        "制作一张同一完整背景内的尺寸展示图，画面比例固定为1:1。左上区域由精致女性手模自然手托产品，"
-        "只用于展示产品真实比例，不在手持区域添加尺寸文字；右下区域展示同一产品正面视角并保留自然投影。"
-        "必须恰好使用长、宽、高三根清晰尺寸线、虚线、箭头和标签，机械对齐且不遮挡产品。"
-        "用户提供尺寸时，同时标注厘米和英寸：原始单位数值使用醒目的产品主题色，换算单位使用较小黑色文字；"
-        "用户未提供尺寸时绝对不能编造数值，只保留三根尺寸线。右上区域添加与产品风格协调的产品尺寸主题图标，"
-        "左下区域加入少量与产品主题相关的装饰。产品身份、外观、颜色、造型、图案、结构、比例、表面细节和材质"
-        "完全以{{产品外观参考图}}为准，不得自行描述、补充、重设计或改变；手与产品的真实大小比例必须严格以"
-        "{{手托比例参考图}}为准。"
-    ),
     "atmosphere": (
         "画面必须为真实相机实拍的电商摄影，禁止背景虚化、计算机生成感、渲染感、虚假光影和不真实合成质感。"
         "整体营造可爱氛围，不得出现人物、手部或任何人体特征。产品外观只以{{产品外观参考图}}为准，最终描述词不得"
@@ -53,6 +44,33 @@ DEFAULT_GROUP_CONSTRAINTS: dict[str, str] = {
 }
 
 
+DEFAULT_SIZE_TEMPLATES: list[dict[str, str]] = [
+    {
+        "id": "size-01",
+        "name": "模板1",
+        "prompt": (
+            "任务概述：分析{{产品外观参考图}}中这款产品的设计DNA，制作电商尺寸图描述词。"
+            "描述词具体任务：在同一个完整背景下，左上角展示女性手托产品，右下角展示产品尺寸标注图；"
+            "严禁两个区域泾渭分明或形成分割画面，必须自然融合在同一背景中。"
+            "背景要求：整体色调从参考产品主色中提炼，点缀元素从产品主题元素、设计灵感和材质中提炼；"
+            "风格简约可爱、高级克制，背景和点缀不能抢夺产品主体。"
+            "左上角构图：根据{{手托比例参考图}}中的手托构图，将{{产品外观参考图}}中的同一产品放在精致女性手模手中；"
+            "女性手指纤细优美，带精致美甲，直观展示产品真实大小。此区域仅展示产品与手部的比例关系，严禁出现任何尺寸信息、尺寸线或箭头。"
+            "右下角构图：把{{产品外观参考图}}中的同一款捏捏玩具作为标注目标，使用正视图平放展示，底部保留自然阴影；"
+            "添加清晰干净的尺寸线、虚线、箭头和英文尺寸标签，仅允许长、宽、高三根尺寸线，严禁增加第四根或重复标注。"
+            "尺寸标注必须精准对应产品长边、宽边和高边的位置延伸，具有机械制图中轴测图尺寸线的空间对应感。"
+            "尺寸文字要求：尺寸数值来自{{产品尺寸}}。用户提供明确尺寸数值时，必须同时显示cm和inch，且清楚区分主辅单位；"
+            "用户上传的原始数值和原始尺寸单位使用较大、明亮的产品同色字体，自动换算的另一单位尺寸使用较小黑色字体。"
+            "如果{{产品尺寸}}为空或未提供明确数值，绝对不要编造厘米或英寸数值，仅展示长、宽、高三根尺寸线。"
+            "右上角加入可爱的PRODUCT SIZE图标，图标设计风格和字体必须契合参考产品；左下角加入从产品设计DNA提炼的拟真元素点缀。"
+            "严格约束：必须严格保持{{产品外观参考图}}中的产品款式和全部细节不变，最终描述词严禁出现任何对产品外观的描述性语句，"
+            "只能称其为参考图中的捏捏玩具，禁止人工智能自行创造、补充或猜测产品细节。"
+            "产品大小比例必须锁定{{手托比例参考图}}中手与产品的真实大小比例。图片比例固定为1:1。"
+        ),
+    }
+]
+
+
 GROUP_ALIASES = {
     "placement": "atmosphere",
     "usage_scene": "scene",
@@ -69,7 +87,29 @@ class RuntimeConfigStore:
 
     @staticmethod
     def _default_payload() -> dict[str, Any]:
-        return {"group_constraints": copy.deepcopy(DEFAULT_GROUP_CONSTRAINTS), "task_briefs": {}}
+        return {
+            "group_constraints": copy.deepcopy(DEFAULT_GROUP_CONSTRAINTS),
+            "task_briefs": {},
+            "size_templates": copy.deepcopy(DEFAULT_SIZE_TEMPLATES),
+        }
+
+    @staticmethod
+    def _clean_size_templates(value: Any) -> list[dict[str, str]]:
+        if not isinstance(value, list):
+            return copy.deepcopy(DEFAULT_SIZE_TEMPLATES)
+        result: list[dict[str, str]] = []
+        seen: set[str] = set()
+        for index, item in enumerate(value, 1):
+            if not isinstance(item, dict):
+                continue
+            template_id = str(item.get("id") or f"size-{index:02d}").strip()
+            name = str(item.get("name") or f"模板{index}").strip()
+            prompt = str(item.get("prompt") or "").strip()
+            if not template_id or template_id in seen or not prompt:
+                continue
+            seen.add(template_id)
+            result.append({"id": template_id, "name": name, "prompt": prompt})
+        return result or copy.deepcopy(DEFAULT_SIZE_TEMPLATES)
 
     def load(self) -> dict[str, Any]:
         defaults = self._default_payload()
@@ -81,12 +121,13 @@ class RuntimeConfigStore:
                 raise ValueError("runtime config must be an object")
             stored_groups = value.get("group_constraints")
             if isinstance(stored_groups, dict):
-                for group in PROMPT_GROUPS:
+                for group in DEFAULT_GROUP_CONSTRAINTS:
                     candidate = str(stored_groups.get(group) or "").strip()
                     if candidate:
                         defaults["group_constraints"][group] = candidate
             # 旧版只有一个通用约束。它不能安全映射到三种工作流，因此迁移时使用三类工作流默认值。
             defaults["task_briefs"] = value.get("task_briefs") if isinstance(value.get("task_briefs"), dict) else {}
+            defaults["size_templates"] = self._clean_size_templates(value.get("size_templates"))
             return defaults
         except (OSError, ValueError, json.JSONDecodeError):
             return defaults
@@ -95,12 +136,13 @@ class RuntimeConfigStore:
         self,
         group_constraints: dict[str, str] | None = None,
         task_briefs: dict[str, str] | None = None,
+        size_templates: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         current = self.load()
         if group_constraints is not None:
             for raw_group, value in group_constraints.items():
                 group = GROUP_ALIASES.get(str(raw_group), str(raw_group))
-                if group not in PROMPT_GROUPS:
+                if group not in DEFAULT_GROUP_CONSTRAINTS:
                     continue
                 current["group_constraints"][group] = str(value).strip() or DEFAULT_GROUP_CONSTRAINTS[group]
         if task_briefs is not None:
@@ -109,6 +151,8 @@ class RuntimeConfigStore:
                 for key, value in task_briefs.items()
                 if str(value).strip()
             }
+        if size_templates is not None:
+            current["size_templates"] = self._clean_size_templates(size_templates)
         self.path.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
         return current
 
@@ -119,11 +163,20 @@ class RuntimeConfigStore:
         group = GROUP_ALIASES.get(str(prompt_group), str(prompt_group))
         return self.group_constraints().get(group, DEFAULT_GROUP_CONSTRAINTS["atmosphere"])
 
+    def size_templates(self) -> list[dict[str, str]]:
+        return copy.deepcopy(self.load().get("size_templates") or DEFAULT_SIZE_TEMPLATES)
+
+    def size_template(self, template_id: str | None) -> dict[str, str]:
+        templates = self.size_templates()
+        return next((item for item in templates if item["id"] == str(template_id or "")), templates[0])
+
     def task_definitions(self) -> list[dict[str, Any]]:
         data = self.load()
         overrides = data.get("task_briefs", {})
         result = copy.deepcopy(TASK_DEFINITIONS)
         for item in result:
+            if item.get("prompt_group") == "size":
+                continue
             override = overrides.get(item["id"])
             if isinstance(override, str) and override.strip():
                 item["brief"] = override.strip()

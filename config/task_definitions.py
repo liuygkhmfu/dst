@@ -14,7 +14,7 @@ TASK_DEFINITIONS = [
     {"id": "10", "name": "生日派对使用场景图", "prompt_group": "scene", "logic": "使用场景", "reference_fields": ["stt", "cpt"], "required": True, "brief": "独立生成第4张使用场景图：生日蛋糕旁，一个美国孩子惊喜地拿着{{产品外观参考图}}中的产品，产品真实大小严格参考{{手托比例参考图}}；另外两个孩子从两侧围拢观察，其中一人准备伸手触碰，完整面部不得入镜。"},
     {"id": "11", "name": "自定义使用场景图", "prompt_group": "scene", "logic": "使用场景", "reference_fields": ["stt", "cpt"], "required": True, "brief": "独立生成第5张使用场景图：把{{自定义使用场景}}扩写为真实、自然、可执行的电商摄影画面，主体必须是{{产品外观参考图}}中的产品，产品真实大小严格参考{{手托比例参考图}}；用户要求与场景图全局约束冲突时以后者优先。"},
     {"id": "12", "name": "课堂教具使用场景图", "prompt_group": "scene", "logic": "使用场景", "reference_fields": ["stt", "cpt"], "required": True, "brief": "独立生成第6张使用场景图：美国小学教室，把{{产品外观参考图}}中的产品与书本文具放在讲台，产品真实大小严格参考{{手托比例参考图}}；老师只拍肩部以下并用手指向产品，前排学生以背影或侧后方轮廓举手回答。"},
-    {"id": "13", "name": "尺寸图", "prompt_group": "size", "logic": "尺寸展示", "reference_fields": ["stt", "cpt"], "required": True, "brief": "独立生成尺寸图：在统一、简洁、可爱的同一背景中，左上角用精致女性手托{{产品外观参考图}}对应的产品，真实手托比例严格参考{{手托比例参考图}}；右下角展示同一产品并依据{{产品尺寸}}添加长、宽、高三根清晰尺寸线和箭头；没有尺寸时不得编造数值。"},
+    {"id": "13", "name": "尺寸图", "prompt_group": "size", "logic": "尺寸展示", "reference_fields": ["stt", "cpt"], "required": True, "brief": "使用新建项目时选择的尺寸图完整模板作为唯一生成要求，由 GPT-5.5 结合参考图重写为最终中文描述词；不再叠加尺寸全局约束或图13单图要求。"},
 ]
 
 TASK_DEFINITION_MAP = {item["id"]: item for item in TASK_DEFINITIONS}

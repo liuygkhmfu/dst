@@ -38,6 +38,7 @@ class GenerationService:
         if is_series and not (series_file and series_file.get("content")):
             raise ValueError("系列品必须上传 cpt 系列外观参考图")
         product_name = str(form.get("product_name") or "未命名产品").strip()
+        size_template = self.config_store.size_template(str(form.get("size_template_id") or "size-01"))
         project_id = uuid.uuid4().hex[:12]
         project_dir = self.storage.create_project_dir(project_id, product_name)
         product_path = self.storage.save_upload(project_dir, "input", product_file.get("filename", "product.png"), product_file["content"], product_file.get("content_type", ""))
@@ -50,6 +51,7 @@ class GenerationService:
             "is_series": 1 if is_series else 0,
             "product_count": max(1, int(form.get("product_count") or 1)), "custom_scene": str(form.get("custom_scene", "")).strip(),
             "display_requirements": str(form.get("display_requirements", "")).strip(), "product_dimensions": str(form.get("product_dimensions", "")).strip(),
+            "size_template_id": size_template["id"],
             "input_product_path": self.storage.relative(project_dir, product_path), "input_series_path": self.storage.relative(project_dir, series_path) if series_path else None,
             "output_dir": str(project_dir), "status": "created", "created_at": created, "updated_at": created,
         }
@@ -341,6 +343,13 @@ class GenerationService:
             lock.release()
 
     def regenerate(self, task_id: str, prompt: str) -> None:
+        prompt = str(prompt or "").strip()
+        if not prompt:
+            raise ValueError("提示词不能为空")
+        if not self.repo.get_task(task_id):
+            raise ValueError("任务不存在")
+        # 先持久化用户编辑，再启动耗时生图；轮询绝不能在生成完成前回传旧描述词。
+        self.repo.update_task(task_id, current_prompt=prompt, status="queued", last_error="")
         threading.Thread(target=self._run_one, args=(task_id, "regenerate", prompt, ""), daemon=True).start()
 
     def edit(self, task_id: str, change_request: str) -> None:

@@ -91,6 +91,9 @@ class PromptService:
     def group_constraints(self) -> dict[str, str]:
         return self.config_store.group_constraints()
 
+    def size_templates(self) -> list[dict[str, str]]:
+        return self.config_store.size_templates()
+
     def constraints_for(self, prompt_group: str) -> str:
         return self.config_store.constraint_for(prompt_group)
 
@@ -141,8 +144,13 @@ class PromptService:
         return True
 
     @staticmethod
-    def _normalize_chinese_prompt(value: Any) -> str:
+    def _normalize_chinese_prompt(value: Any, allow_size_labels: bool = False) -> str:
         text = str(value or "")
+        if allow_size_labels:
+            # 尺寸图的画面文字明确要求保留这三个英文标签；其余英文仍会被清理。
+            text = re.sub(r"(?i)PRODUCT\s+SIZE", "【保留产品尺寸英文图标】", text)
+            text = re.sub(r"(?i)(?<![A-Za-z])cm(?![A-Za-z])", "【保留厘米英文标签】", text)
+            text = re.sub(r"(?i)(?<![A-Za-z])(?:inches|inch)(?![A-Za-z])", "【保留英寸英文标签】", text)
         replacements = (
             (r"(?i)(?<![A-Za-z])4K(?![A-Za-z])", "超清"),
             (r"(?i)(?<![A-Za-z])CG(?![A-Za-z])", "计算机生成"),
@@ -159,15 +167,19 @@ class PromptService:
             text = re.sub(pattern, replacement, text)
         # 网关偶尔仍会夹带英文摄影术语；最终交给生图模型的描述词严格保持全中文。
         text = re.sub(r"[A-Za-z]+", "", text)
+        if allow_size_labels:
+            text = text.replace("【保留产品尺寸英文图标】", "PRODUCT SIZE")
+            text = text.replace("【保留厘米英文标签】", "cm")
+            text = text.replace("【保留英寸英文标签】", "inch")
         return re.sub(r"[ \t]{2,}", " ", text)
 
     @classmethod
-    def _clean_prompt(cls, value: Any) -> str:
+    def _clean_prompt(cls, value: Any, allow_size_labels: bool = False) -> str:
         text = str(value or "").strip().strip("`").strip()
         text = re.sub(r"^(?:提示词|完整描述词|最终描述词)\s*[:：]\s*", "", text)
         text = re.sub(r"^【?图\s*\d{1,2}】?\s*[:：\-]?\s*", "", text)
         text = cls.strip_reference_variable_contract(text)
-        return cls._normalize_chinese_prompt(text).strip()
+        return cls._normalize_chinese_prompt(text, allow_size_labels=allow_size_labels).strip()
 
     @staticmethod
     def _task_user_inputs(project: dict[str, Any], item: dict[str, Any]) -> dict[str, Any]:
@@ -231,6 +243,13 @@ class PromptService:
             template_values = self.template_values(project)
             appearance_reference = template_values["产品外观参考图"]
             scale_reference = template_values["手托比例参考图"]
+            if item["prompt_group"] == "size":
+                size_template = self.config_store.size_template(project.get("size_template_id"))
+                prompts[slot] = self._normalize_chinese_prompt(
+                    self.render_template(size_template["prompt"], project),
+                    allow_size_labels=True,
+                ).strip()
+                continue
             group_constraints = self.render_template(self.constraints_for(item["prompt_group"]), project)
             rendered_brief = self.render_template(item["brief"], project)
             if item["prompt_group"] == "atmosphere":
@@ -249,8 +268,6 @@ class PromptService:
                     "11": f"将用户自定义场景扩写为真实可执行的电商摄影画面，用户场景为：{custom}。",
                     "12": "美国小学教室侧中后排第三人称视角，产品与书本文具放在讲台，老师在旁边指向产品且只拍肩部以下；前排学生以背影或侧后方轮廓举手回答，体现教学互动。",
                 }.get(slot, item["brief"])
-            else:
-                variant = f"在同一张完整画面中完成尺寸展示：左上角用精致女性手托产品体现真实比例，右下角展示同一产品并添加长、宽、高三根对应的尺寸线、虚线和箭头。用户提供的尺寸为：{dimensions}。"
             prompt = (
                 f"这是单独生成的第{slot}张{logic}电商图片，不能与其他任务合并，也不能省略本张图片的画面要求。"
                 f"{group_constraints} "
@@ -297,6 +314,23 @@ class PromptService:
         if len(groups) != 1:
             raise ValueError("每次描述词分析只能处理一种工作流类型")
         prompt_group = str(items[0]["prompt_group"]) if items else "atmosphere"
+        size_template = self.config_store.size_template(project.get("size_template_id")) if prompt_group == "size" else None
+
+        def selected_requirement(item: dict[str, Any]) -> str:
+            if size_template:
+                return str(size_template["prompt"])
+            return str(item["brief"])
+
+        output_requirement = (
+            "必须为尺寸图生成一条独立、完整、可直接用于图片生成的描述词。只返回JSON对象，键必须是两位任务编号，"
+            "描述词主体使用中文；仅保留画面必须显示的PRODUCT SIZE、cm、inch这三类英文标签，其他内容不得使用英文字母。"
+            "不得输出Markdown、解释、备注或编号标签。严禁描述、猜测或创造产品的颜色、造型、图案、结构、材质等外观细节，"
+            "只能指向对应参考图。参考图变量约束只用于理解输入图片角色，禁止复制内部规则标题。"
+            "单品的外观和比例都以手托比例参考图为准；系列品外观只能由系列外观参考图锚定，手托比例参考图只控制大小比例。"
+            if size_template
+            else "必须为任务列表中的每一个编号分别生成一条独立、完整、可直接用于图片生成的中文描述词。绝对不能合并、跳过、复用或省略任何一张图。只返回JSON对象，键必须是两位任务编号，值必须是全中文描述词；单位写作厘米和英寸，不要使用英文字母，不要输出Markdown、解释、备注或编号标签。参考图变量约束只用于你理解输入图片角色，禁止把【参考图变量约束】标题或整段内部规则复制到输出描述词开头。每张图只能使用该任务自己的用户输入，严禁把其他图片类型或其他编号的用户输入混入本图。单品的外观和比例都以手托比例参考图为准；系列品的外观只能由系列外观参考图锚定，手托比例参考图只控制大小比例，不得覆盖外观。"
+        )
+
         instruction = {
             "分析参考图输入顺序": [
                 {"输入序号": index, "变量": item["label"], "用途": item["purpose"]}
@@ -307,17 +341,18 @@ class PromptService:
                     "编号": item["id"],
                     "名称": item["name"],
                     "逻辑": self._logic_name(item),
-                    "内置描述词模板": item["brief"],
-                    "渲染后的内置要求": self.render_template(item["brief"], project),
+                    "内置描述词模板": selected_requirement(item),
+                    "渲染后的内置要求": self.render_template(selected_requirement(item), project),
+                    "尺寸图模板名称": size_template["name"] if size_template else None,
                     "参考图变量约束": self._reference_variable_contract(project, item),
                     "仅供本图使用的用户输入": self._task_user_inputs(project, item),
                 }
                 for item in items
             ],
             "当前图片类型": self._logic_name(items[0]) if items else "电商图片",
-            "本类型专属全局规则模板": self.constraints_for(prompt_group),
-            "渲染后的本类型专属全局规则": self.render_template(self.constraints_for(prompt_group), project),
-            "输出要求": "必须为任务列表中的每一个编号分别生成一条独立、完整、可直接用于图片生成的中文描述词。绝对不能合并、跳过、复用或省略任何一张图。只返回 JSON 对象，键必须是两位任务编号，值必须是全中文描述词；单位写作厘米和英寸，不要使用英文字母，不要输出 Markdown、解释、备注或编号标签。参考图变量约束只用于你理解输入图片角色，禁止把【参考图变量约束】标题或整段内部规则复制到输出描述词开头。每张图只能使用该任务自己的用户输入，严禁把其他图片类型或其他编号的用户输入混入本图。单品的外观和比例都以手托比例参考图为准；系列品的外观只能由系列外观参考图锚定，手托比例参考图只控制大小比例，不得覆盖外观。",
+            "本类型专属全局规则模板": "尺寸图不使用额外全局约束" if size_template else self.constraints_for(prompt_group),
+            "渲染后的本类型专属全局规则": "尺寸图只使用当前选择的完整模板要求" if size_template else self.render_template(self.constraints_for(prompt_group), project),
+            "输出要求": output_requirement,
         }
         content_parts = [{"type": "text", "text": json.dumps(instruction, ensure_ascii=False)}]
         content_parts.extend(
@@ -352,14 +387,14 @@ class PromptService:
             for item in definitions:
                 if item["id"] in ids:
                     grouped_ids.setdefault(str(item["prompt_group"]), []).append(item["id"])
-            # 三种工作流分别调用分析模型，确保每批只继承本类型的全局约束。
-            for group_task_ids in grouped_ids.values():
+            # 三种工作流分别调用分析模型；尺寸图只提交项目选择的完整模板，不叠加全局或单图约束。
+            for prompt_group, group_task_ids in grouped_ids.items():
                 try:
                     prompts = self._request_prompts(project, image_inputs, definitions, group_task_ids)
                 except Exception:
                     prompts = {}
                 for key, value in prompts.items():
-                    candidate = self._clean_prompt(value)
+                    candidate = self._clean_prompt(value, allow_size_labels=prompt_group == "size")
                     if key in group_task_ids and key in local and self._usable_prompt(candidate):
                         accepted[key] = candidate
                 missing = [task_id for task_id in group_task_ids if task_id not in accepted]
@@ -367,7 +402,7 @@ class PromptService:
                 for task_id in missing:
                     try:
                         one = self._request_prompts(project, image_inputs, definitions, [task_id])
-                        candidate = self._clean_prompt(one.get(task_id, ""))
+                        candidate = self._clean_prompt(one.get(task_id, ""), allow_size_labels=prompt_group == "size")
                         if self._usable_prompt(candidate):
                             accepted[task_id] = candidate
                     except Exception:

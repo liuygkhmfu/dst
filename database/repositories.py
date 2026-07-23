@@ -24,14 +24,16 @@ class Repository:
         self.db = db
 
     def create_project(self, project: dict[str, Any]) -> None:
+        project = dict(project)
+        project.setdefault("size_template_id", "size-01")
         with self.db.connection() as conn:
             conn.execute(
                 """INSERT INTO projects
                 (id, product_name, product_description, is_series, product_count,
-                 custom_scene, display_requirements, product_dimensions,
+                 custom_scene, display_requirements, product_dimensions, size_template_id,
                  input_product_path, input_series_path, output_dir, status, created_at, updated_at)
                 VALUES (:id,:product_name,:product_description,:is_series,:product_count,
-                 :custom_scene,:display_requirements,:product_dimensions,
+                 :custom_scene,:display_requirements,:product_dimensions,:size_template_id,
                  :input_product_path,:input_series_path,:output_dir,:status,:created_at,:updated_at)""",
                 project,
             )
