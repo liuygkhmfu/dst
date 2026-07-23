@@ -10,8 +10,8 @@ from config.task_definitions import TASK_DEFINITIONS
 
 PROMPT_GROUPS: dict[str, dict[str, str]] = {
     "size": {
-        "label": "尺寸图",
-        "description": "选择一个完整尺寸图模板作为 GPT-5.5 的描述词生成要求，不与尺寸全局约束或图13单图要求拼接。",
+        "label": "功能图",
+        "description": "选择一个完整功能图模板作为 GPT-5.5 的描述词生成要求；既可维护尺寸图，也可新增卖点图、结构图等其他功能性图片要求。",
         "mode": "selected_template_analysis",
     },
     "atmosphere": {
@@ -44,7 +44,7 @@ DEFAULT_GROUP_CONSTRAINTS: dict[str, str] = {
 }
 
 
-DEFAULT_SIZE_TEMPLATES: list[dict[str, str]] = [
+DEFAULT_FUNCTION_TEMPLATES: list[dict[str, str]] = [
     {
         "id": "size-01",
         "name": "模板1",
@@ -69,6 +69,8 @@ DEFAULT_SIZE_TEMPLATES: list[dict[str, str]] = [
         ),
     }
 ]
+# 兼容旧代码和旧测试；持久化文件改用 function_templates。
+DEFAULT_SIZE_TEMPLATES = DEFAULT_FUNCTION_TEMPLATES
 
 
 GROUP_ALIASES = {
@@ -90,26 +92,26 @@ class RuntimeConfigStore:
         return {
             "group_constraints": copy.deepcopy(DEFAULT_GROUP_CONSTRAINTS),
             "task_briefs": {},
-            "size_templates": copy.deepcopy(DEFAULT_SIZE_TEMPLATES),
+            "function_templates": copy.deepcopy(DEFAULT_FUNCTION_TEMPLATES),
         }
 
     @staticmethod
-    def _clean_size_templates(value: Any) -> list[dict[str, str]]:
+    def _clean_function_templates(value: Any) -> list[dict[str, str]]:
         if not isinstance(value, list):
-            return copy.deepcopy(DEFAULT_SIZE_TEMPLATES)
+            return copy.deepcopy(DEFAULT_FUNCTION_TEMPLATES)
         result: list[dict[str, str]] = []
         seen: set[str] = set()
         for index, item in enumerate(value, 1):
             if not isinstance(item, dict):
                 continue
-            template_id = str(item.get("id") or f"size-{index:02d}").strip()
+            template_id = str(item.get("id") or f"function-{index:02d}").strip()
             name = str(item.get("name") or f"模板{index}").strip()
             prompt = str(item.get("prompt") or "").strip()
             if not template_id or template_id in seen or not prompt:
                 continue
             seen.add(template_id)
             result.append({"id": template_id, "name": name, "prompt": prompt})
-        return result or copy.deepcopy(DEFAULT_SIZE_TEMPLATES)
+        return result or copy.deepcopy(DEFAULT_FUNCTION_TEMPLATES)
 
     def load(self) -> dict[str, Any]:
         defaults = self._default_payload()
@@ -127,7 +129,10 @@ class RuntimeConfigStore:
                         defaults["group_constraints"][group] = candidate
             # 旧版只有一个通用约束。它不能安全映射到三种工作流，因此迁移时使用三类工作流默认值。
             defaults["task_briefs"] = value.get("task_briefs") if isinstance(value.get("task_briefs"), dict) else {}
-            defaults["size_templates"] = self._clean_size_templates(value.get("size_templates"))
+            stored_templates = value.get("function_templates")
+            if stored_templates is None:
+                stored_templates = value.get("size_templates")
+            defaults["function_templates"] = self._clean_function_templates(stored_templates)
             return defaults
         except (OSError, ValueError, json.JSONDecodeError):
             return defaults
@@ -136,6 +141,7 @@ class RuntimeConfigStore:
         self,
         group_constraints: dict[str, str] | None = None,
         task_briefs: dict[str, str] | None = None,
+        function_templates: list[dict[str, Any]] | None = None,
         size_templates: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         current = self.load()
@@ -151,9 +157,12 @@ class RuntimeConfigStore:
                 for key, value in task_briefs.items()
                 if str(value).strip()
             }
-        if size_templates is not None:
-            current["size_templates"] = self._clean_size_templates(size_templates)
-        self.path.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
+        templates = function_templates if function_templates is not None else size_templates
+        if templates is not None:
+            current["function_templates"] = self._clean_function_templates(templates)
+        temp_path = self.path.with_suffix(".json.tmp")
+        temp_path.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
+        temp_path.replace(self.path)
         return current
 
     def group_constraints(self) -> dict[str, str]:
@@ -163,12 +172,18 @@ class RuntimeConfigStore:
         group = GROUP_ALIASES.get(str(prompt_group), str(prompt_group))
         return self.group_constraints().get(group, DEFAULT_GROUP_CONSTRAINTS["atmosphere"])
 
+    def function_templates(self) -> list[dict[str, str]]:
+        return copy.deepcopy(self.load().get("function_templates") or DEFAULT_FUNCTION_TEMPLATES)
+
+    def function_template(self, template_id: str | None) -> dict[str, str]:
+        templates = self.function_templates()
+        return next((item for item in templates if item["id"] == str(template_id or "")), templates[0])
+
     def size_templates(self) -> list[dict[str, str]]:
-        return copy.deepcopy(self.load().get("size_templates") or DEFAULT_SIZE_TEMPLATES)
+        return self.function_templates()
 
     def size_template(self, template_id: str | None) -> dict[str, str]:
-        templates = self.size_templates()
-        return next((item for item in templates if item["id"] == str(template_id or "")), templates[0])
+        return self.function_template(template_id)
 
     def task_definitions(self) -> list[dict[str, Any]]:
         data = self.load()

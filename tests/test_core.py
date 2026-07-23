@@ -3,15 +3,23 @@ from __future__ import annotations
 import json
 import re
 import tempfile
+import zipfile
 from dataclasses import replace
+from datetime import date
 from pathlib import Path
 
-from config.settings import get_settings
+from config.settings import IMAGE_QUALITY_OPTIONS, get_settings, normalize_image_quality
 from config.runtime_config import RuntimeConfigStore
 from database.db import Database
 from database.repositories import Repository
 from services.prompt_service import PromptService, parse_prompt_response
 from services.storage_service import StorageService, make_mock_png, read_image_info, safe_name
+
+
+def test_image_quality_options_are_normalized():
+    assert IMAGE_QUALITY_OPTIONS == ("auto", "low", "medium", "high")
+    assert normalize_image_quality(" HIGH ") == "high"
+    assert normalize_image_quality("unsupported") == "low"
 
 
 def test_prompt_parser_accepts_json_and_legacy_format():
@@ -190,7 +198,7 @@ def test_local_prompts_keep_three_logics_and_one_prompt_per_image(tmp_path: Path
     assert not re.search(r"[A-Za-z]", size_without_allowed_labels)
     assert all(label in prompts["13"] for label in ("PRODUCT SIZE", "cm", "inch"))
     definitions = service.task_definitions()
-    assert {item["logic"] for item in definitions} == {"氛围摆放", "使用场景", "尺寸展示"}
+    assert {item["logic"] for item in definitions} == {"氛围摆放", "使用场景", "功能图"}
 
 
 def test_legacy_reference_contract_is_removed_from_visible_prompt():
@@ -331,8 +339,85 @@ def test_selected_size_template_is_sent_to_gpt_without_size_global_or_task_brief
     instruction = json.loads(captured["body"]["messages"][0]["content"][0]["text"])
     assert instruction["任务"][0]["内置描述词模板"].startswith("只按这套尺寸要求生成")
     assert "8 x 6 x 4 cm" in instruction["任务"][0]["渲染后的内置要求"]
-    assert instruction["本类型专属全局规则模板"] == "尺寸图不使用额外全局约束"
+    assert instruction["本类型专属全局规则模板"] == "功能图不使用额外全局约束"
     assert "独立生成尺寸图" not in instruction["任务"][0]["内置描述词模板"]
+
+
+def test_function_templates_persist_and_migrate_from_legacy_key(tmp_path: Path):
+    store = RuntimeConfigStore(tmp_path / "data")
+    saved = store.save(
+        function_templates=[
+            {"id": "function-selling-point", "name": "卖点图", "prompt": "制作卖点图，锁定{{产品外观参考图}}。"}
+        ]
+    )
+    assert saved["function_templates"][0]["name"] == "卖点图"
+    assert store.function_template("function-selling-point")["prompt"].startswith("制作卖点图")
+    assert store.size_template("function-selling-point")["name"] == "卖点图"
+    persisted = json.loads(store.path.read_text(encoding="utf-8"))
+    assert "function_templates" in persisted
+    assert "size_templates" not in persisted
+
+
+def test_appended_function_image_creates_independent_task(tmp_path: Path):
+    from services.generation_service import GenerationService
+
+    settings = replace(
+        get_settings(tmp_path),
+        data_dir=tmp_path / "data",
+        output_root=tmp_path / "outputs",
+        db_path=tmp_path / "data" / "app.db",
+        prompt_api_key="",
+        mock_mode=True,
+    )
+    repo = Repository(Database(settings.db_path))
+    service = GenerationService(settings, repo, StorageService(settings.output_root))
+    service.config_store.save(
+        function_templates=[
+            {"id": "function-detail", "name": "细节卖点图", "prompt": "制作产品细节卖点图，外观参考{{产品外观参考图}}，比例参考{{手托比例参考图}}。"}
+        ]
+    )
+    product = {"filename": "product.png", "content": make_mock_png("product"), "content_type": "image/png"}
+    project_id = service.create_project(
+        {
+            "product_name": "demo",
+            "enabled_tasks": '["03"]',
+            "function_requests": '[{"template_id":"function-detail","name":"材质细节图"}]',
+        },
+        product,
+        None,
+        {},
+    )
+    tasks = repo.get_tasks(project_id)
+    assert [task["slot_id"] for task in tasks] == ["03", "FN-01"]
+    function_task = next(task for task in tasks if task["slot_id"] == "FN-01")
+    assert function_task["task_kind"] == "function"
+    assert function_task["prompt_group"] == "function"
+    assert function_task["task_name"] == "材质细节图"
+    assert "【产品外观参考图】" in function_task["current_prompt"]
+    assert "【手托比例参考图】" in function_task["current_prompt"]
+
+
+def test_export_creates_product_date_folder_and_zip(tmp_path: Path):
+    storage = StorageService(tmp_path / "outputs")
+    project_dir = storage.create_project_dir("p1", "桃子捏捏")
+    image_a = project_dir / "tasks" / "03.png"
+    image_b = project_dir / "tasks" / "13.png"
+    image_a.parent.mkdir(parents=True, exist_ok=True)
+    image_a.write_bytes(make_mock_png("a"))
+    image_b.write_bytes(make_mock_png("b"))
+
+    archive, export_dir = storage.export_final_bundle(
+        project_dir,
+        "桃子捏捏",
+        [image_a, image_b],
+        export_date=date(2026, 7, 23),
+    )
+
+    assert export_dir.name == "桃子捏捏_2026-07-23"
+    assert sorted(path.name for path in export_dir.iterdir()) == ["03.png", "13.png"]
+    assert archive.exists() and archive.suffix == ".zip"
+    with zipfile.ZipFile(archive) as exported_zip:
+        assert sorted(exported_zip.namelist()) == ["03.png", "13.png"]
 
 
 def test_each_workflow_task_receives_only_its_relevant_user_inputs(tmp_path: Path):

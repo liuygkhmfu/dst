@@ -38,7 +38,7 @@ class GenerationService:
         if is_series and not (series_file and series_file.get("content")):
             raise ValueError("系列品必须上传 cpt 系列外观参考图")
         product_name = str(form.get("product_name") or "未命名产品").strip()
-        size_template = self.config_store.size_template(str(form.get("size_template_id") or "size-01"))
+        function_template = self.config_store.function_template(str(form.get("size_template_id") or "size-01"))
         project_id = uuid.uuid4().hex[:12]
         project_dir = self.storage.create_project_dir(project_id, product_name)
         product_path = self.storage.save_upload(project_dir, "input", product_file.get("filename", "product.png"), product_file["content"], product_file.get("content_type", ""))
@@ -51,7 +51,7 @@ class GenerationService:
             "is_series": 1 if is_series else 0,
             "product_count": max(1, int(form.get("product_count") or 1)), "custom_scene": str(form.get("custom_scene", "")).strip(),
             "display_requirements": str(form.get("display_requirements", "")).strip(), "product_dimensions": str(form.get("product_dimensions", "")).strip(),
-            "size_template_id": size_template["id"],
+            "size_template_id": function_template["id"],
             "input_product_path": self.storage.relative(project_dir, product_path), "input_series_path": self.storage.relative(project_dir, series_path) if series_path else None,
             "output_dir": str(project_dir), "status": "created", "created_at": created, "updated_at": created,
         }
@@ -63,9 +63,20 @@ class GenerationService:
             if item["id"] not in enabled_ids:
                 continue
             task_id = uuid.uuid4().hex
+            task_name = function_template["name"] if item["id"] == "13" else item["name"]
             self.repo.create_task({
-                "id": task_id, "project_id": project_id, "slot_id": item["id"], "task_name": item["name"], "task_kind": "workflow", "prompt_group": item["prompt_group"],
+                "id": task_id, "project_id": project_id, "slot_id": item["id"], "task_name": task_name, "task_kind": "workflow", "prompt_group": item["prompt_group"],
                 "original_prompt": prompts[item["id"]], "current_prompt": prompts[item["id"]], "reference_fields_json": json.dumps(item["reference_fields"], ensure_ascii=False), "status": "queued", "selected_version_id": None, "last_error": "", "created_at": created, "updated_at": created,
+            })
+        function_defs = self._parse_function_requests(form.get("function_requests"))
+        for index, item in enumerate(function_defs, 1):
+            template = self.config_store.function_template(str(item.get("template_id") or ""))
+            task_name = str(item.get("name") or template["name"]).strip() or template["name"]
+            prompt = self.prompt_service.generate_function_prompt(project, template, product_path, series_path)
+            task_id = uuid.uuid4().hex
+            self.repo.create_task({
+                "id": task_id, "project_id": project_id, "slot_id": f"FN-{index:02d}", "task_name": task_name, "task_kind": "function", "prompt_group": "function",
+                "original_prompt": prompt, "current_prompt": prompt, "reference_fields_json": json.dumps(["stt", "cpt"], ensure_ascii=False), "status": "queued", "selected_version_id": None, "last_error": "", "created_at": created, "updated_at": created,
             })
         extra_defs = self._parse_extra_requests(form.get("extra_requests"))
         for index, extra in enumerate(extra_defs, 1):
@@ -107,6 +118,16 @@ class GenerationService:
         except (TypeError, ValueError, json.JSONDecodeError):
             return []
 
+    @staticmethod
+    def _parse_function_requests(value: Any) -> list[dict[str, Any]]:
+        if not value:
+            return []
+        try:
+            items = json.loads(value) if isinstance(value, str) else value
+            return [item for item in items if isinstance(item, dict) and str(item.get("template_id", "")).strip()]
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return []
+
     def start_initial_generation(self, project_id: str) -> None:
         self.repo.update_project(project_id, status="generating")
         threading.Thread(target=self._run_initial, args=(project_id,), daemon=True, name=f"generate-{project_id}").start()
@@ -138,8 +159,13 @@ class GenerationService:
                 definition = definitions.get(task["slot_id"])
                 updates: dict[str, Any] = {}
                 if task["task_kind"] == "workflow" and definition:
-                    if task["task_name"] != definition["name"]:
-                        updates["task_name"] = definition["name"]
+                    expected_name = (
+                        self.config_store.function_template(project.get("size_template_id"))["name"]
+                        if task["slot_id"] == "13"
+                        else definition["name"]
+                    )
+                    if task["task_name"] != expected_name:
+                        updates["task_name"] = expected_name
                     if task["prompt_group"] != definition["prompt_group"]:
                         updates["prompt_group"] = definition["prompt_group"]
                     expected_reference_fields = list(definition.get("reference_fields") or [])
@@ -172,9 +198,14 @@ class GenerationService:
             if not prompt:
                 raise ValueError(f"图{task['slot_id']}没有生成有效描述词")
             definition = definition_map.get(task["slot_id"], {})
+            task_name = (
+                self.config_store.function_template(project.get("size_template_id"))["name"]
+                if task["slot_id"] == "13"
+                else definition.get("name", task["task_name"])
+            )
             self.repo.update_task(
                 task["id"],
-                task_name=definition.get("name", task["task_name"]),
+                task_name=task_name,
                 prompt_group=definition.get("prompt_group", task["prompt_group"]),
                 original_prompt=prompt,
                 current_prompt=prompt,

@@ -132,7 +132,7 @@
   </div>
   <div class="toast" id="toast"></div>
   <script>
-    const state = { projects: [], project: null, viewVersions: {}, promptDrafts: {}, editDrafts: {}, poll: null };
+    const state = { projects: [], project: null, viewVersions: {}, promptDrafts: {}, editDrafts: {}, functionTemplates: [], poll: null };
     const $ = (s, root=document) => root.querySelector(s);
     const $$ = (s, root=document) => [...root.querySelectorAll(s)];
     const esc = (v='') => String(v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -146,17 +146,17 @@
     }
 
     function renderSizeTemplateRows(templates=[]) {
-      return `<div class="size-template-list">${templates.map((t,i)=>`<div class="size-template-row" data-template-id="${esc(t.id)}"><div class="size-template-head"><div class="field"><label>模板名称</label><input class="size-template-name" type="text" value="${esc(t.name||`模板${i+1}`)}"></div><p>这是尺寸图的一整套描述词生成要求，可直接使用工作流占位词。</p><button type="button" class="btn btn-danger" data-action="remove-size-template">删除模板</button></div><textarea class="size-template-prompt" placeholder="请输入一整套尺寸图描述词生成要求">${esc(t.prompt||'')}</textarea></div>`).join('')}</div>`;
+      return `<div class="size-template-list">${templates.map((t,i)=>`<div class="size-template-row" data-template-id="${esc(t.id)}"><div class="size-template-head"><div class="field"><label>模板名称</label><input class="size-template-name" type="text" value="${esc(t.name||`功能图模板${i+1}`)}"></div><p>这是一张功能图的完整描述词生成要求，可使用工作流占位词；模板之间互不拼接。</p><button type="button" class="btn btn-danger" data-action="remove-size-template">删除模板</button></div><textarea class="size-template-prompt" placeholder="请输入尺寸图、卖点图、结构图等功能图的完整生成要求">${esc(t.prompt||'')}</textarea></div>`).join('')}</div>`;
     }
 
     function renderPromptDesign(s) {
       const groups=s.prompt_groups||[];
       const panels=groups.map((g,i)=>{
-        if(g.key==='size') return `<section class="constraint-panel ${i===0?'active':''}" data-prompt-panel="size"><p><b>尺寸图使用可选完整模板</b> · 新建项目时选择其中一套，作为尺寸描述词分析的唯一内置要求，结合参考图交给 GPT-5.5 重写；不再拼接尺寸全局约束或图13单图要求。</p>${renderSizeTemplateRows(s.size_templates||[])}<button type="button" class="btn btn-ghost" style="margin-top:14px" data-action="add-size-template">+ 新增尺寸图模板</button></section>`;
+        if(g.key==='size') return `<section class="constraint-panel ${i===0?'active':''}" data-prompt-panel="size"><p><b>功能图使用可选完整模板</b> · 每个模板可以是尺寸图、卖点图、结构图或其他功能性图片要求；选择后会结合参考图单独交给 GPT-5.5 重写，不与其他模板或全局约束拼接。</p>${renderSizeTemplateRows(s.function_templates||s.size_templates||[])}<button type="button" class="btn btn-ghost" style="margin-top:14px" data-action="add-size-template">+ 新增功能图模板</button></section>`;
         const tasks=(s.task_templates||[]).filter(d=>d.prompt_group===g.key);
         return `<section class="constraint-panel ${i===0?'active':''}" data-prompt-panel="${esc(g.key)}"><p><b>${esc(g.label)}专属全局约束</b> · ${esc(g.description)}</p><textarea class="group-constraint" data-group="${esc(g.key)}">${esc(s.group_constraints?.[g.key]||'')}</textarea><div class="settings-task-list"><h3>${esc(g.label)}的单图要求</h3><p style="margin:6px 0 14px">每一条与本类型全局约束、相关用户字段和参考图一起交给 GPT-5.5，重写为该图片独立的完整中文描述词。</p>${tasks.map(d=>`<div class="field" style="margin-bottom:14px"><label><span class="task-id">图${esc(d.id)}</span>${esc(d.name)} <span class="hint">${esc(d.logic||d.prompt_group)}</span></label><textarea class="settings-task" data-task-id="${esc(d.id)}">${esc(d.brief)}</textarea></div>`).join('')}</div></section>`;
       }).join('');
-      return `<div class="section"><div class="section-head"><div><h2>三类描述词设计</h2><p>尺寸图选择一套完整生成要求；氛围摆放图和场景图分别使用自己的全局约束与单图要求。</p></div></div><div class="notice"><b>当前处理逻辑：</b>尺寸图 = 所选完整模板 + 相关用户字段 + 参考图，单独交给 GPT-5.5 重写；氛围/场景图 = 本类型全局约束 + 当前单图要求 + 允许使用的用户字段 + 参考图，分别交给 GPT-5.5 重写。stt/cpt 的参考角色约束会在请求中自动注入。</div>${renderPromptVariables(s)}<div class="logic-tabs">${groups.map((g,i)=>`<button type="button" class="logic-tab ${i===0?'active':''}" data-action="prompt-tab" data-group="${esc(g.key)}">${esc(g.label)}</button>`).join('')}</div>${panels}</div>`;
+      return `<div class="section"><div class="section-head"><div><h2>三类描述词设计</h2><p>功能图选择一套完整模板；氛围摆放图和场景图分别使用自己的全局约束与单图要求。</p></div></div><div class="notice"><b>当前处理逻辑：</b>功能图 = 当前所选完整模板 + 相关用户字段 + 参考图，单独交给 GPT-5.5 重写；氛围/场景图 = 本类型全局约束 + 当前单图要求 + 允许使用的用户字段 + 参考图，分别交给 GPT-5.5 重写。stt/cpt 的参考角色约束会在请求中自动注入。</div>${renderPromptVariables(s)}<div class="logic-tabs">${groups.map((g,i)=>`<button type="button" class="logic-tab ${i===0?'active':''}" data-action="prompt-tab" data-group="${esc(g.key)}">${esc(g.label)}</button>`).join('')}</div>${panels}</div>`;
     }
 
     function addSizeTemplate() {
@@ -165,8 +165,92 @@
       const index=list.children.length;
       const seed=$('.size-template-prompt',list)?.value||'';
       const wrap=document.createElement('div');
-      wrap.innerHTML=renderSizeTemplateRows([{id:`size-${Date.now()}`,name:`模板${index+1}`,prompt:seed}]);
+      wrap.innerHTML=renderSizeTemplateRows([{id:`function-${Date.now()}`,name:`功能图模板${index+1}`,prompt:seed}]);
       list.appendChild(wrap.firstElementChild.firstElementChild);
+    }
+
+    function functionTemplateOptions(selected='') {
+      return state.functionTemplates.map((t,i)=>`<option value="${esc(t.id)}" ${(selected?selected===t.id:i===0)?'selected':''}>${esc(t.name)}</option>`).join('');
+    }
+
+    function addFunctionRequest() {
+      const list=$('#function-request-list');
+      if(!list || !state.functionTemplates.length) return toast('请先在设置中新增并保存功能图模板');
+      const index=list.children.length;
+      const row=document.createElement('div');
+      row.className='extra-row function-request-row';
+      row.innerHTML=`<div class="extra-num">${index+1}</div><div class="extra-fields"><div class="field"><label>选择功能图模板</label><select class="function-template-select">${functionTemplateOptions()}</select></div><div class="field"><label>本张图片名称 <span class="hint">留空则使用模板名称</span></label><input class="function-task-name" type="text" placeholder="${esc(state.functionTemplates[0]?.name||'功能图')}"></div></div><button type="button" class="remove-extra" data-action="remove-function" title="删除">×</button>`;
+      list.appendChild(row);
+    }
+
+    async function ensureNewProjectEnhancements() {
+      const form=$('#project-form');
+      if(!form || $('#function-request-list',form)) return;
+      if(!state.functionTemplates.length) {
+        const settings=await api('/api/settings');
+        state.functionTemplates=settings.function_templates||settings.size_templates||[];
+      }
+      const templateSelect=$('[name="size_template_id"]',form);
+      if(templateSelect) {
+        templateSelect.innerHTML=functionTemplateOptions(templateSelect.value);
+        const field=templateSelect.closest('.field');
+        const label=$('label',field);
+        if(label) label.innerHTML='首张功能图模板 <span class="hint">图13默认使用；尺寸图只是模板1，也可改选其他功能图</span>';
+      }
+      const dimensionsLabel=$('input[name="product_dimensions"]',form)?.closest('.field')?.querySelector('label');
+      if(dimensionsLabel) dimensionsLabel.innerHTML='产品尺寸 <span class="hint">供需要尺寸数据的功能图模板使用；没有尺寸时不得编造</span>';
+      const workflowSection=$$('.section',form).find(section=>$('h2',section)?.textContent.trim()==='工作流任务');
+      const workflowDescription=workflowSection?.querySelector('.section-head p');
+      if(workflowDescription) workflowDescription.textContent='内置任务按功能图、氛围摆放图、使用场景图三种逻辑独立生成，每张图都有完整描述词。';
+      const extraSection=$$('.section',form).find(section=>$('h2',section)?.textContent.trim()==='额外参考图需求');
+      if(!extraSection) return;
+      const section=document.createElement('div');
+      section.className='section';
+      section.innerHTML=`<div class="section-head"><div><h2>追加功能图</h2><p>除图13外，可从设置中保存的功能图模板继续追加图片；每一行都是独立任务并由 GPT-5.5 单独重写描述词。</p></div><button type="button" class="btn btn-ghost" data-action="add-function">+ 追加一张功能图</button></div><div class="notice">追加任务默认使用产品的 stt/cpt 参考规则，不会与摆放图、场景图或其他功能图模板拼接。</div><div class="extra-list" id="function-request-list" style="margin-top:12px"></div>`;
+      extraSection.before(section);
+    }
+
+    async function submitSettingsFixed(form) {
+      const task_briefs={};
+      $$('.settings-task',form).forEach(el=>task_briefs[el.dataset.taskId]=el.value);
+      const group_constraints={};
+      $$('.group-constraint',form).forEach(el=>group_constraints[el.dataset.group]=el.value);
+      const function_templates=$$('.size-template-row',form).map(row=>({
+        id:row.dataset.templateId,
+        name:$('.size-template-name',row).value,
+        prompt:$('.size-template-prompt',row).value
+      }));
+      const payload={
+        output_root:$('[name=output_root]',form).value,
+        image_api_base_url:$('[name=image_api_base_url]',form).value,
+        image_api_key:$('[name=image_api_key]',form).value,
+        image_model:$('[name=image_model]',form).value,
+        image_size:$('[name=image_size]',form).value,
+        image_quality:$('[name=image_quality]',form).value,
+        image_moderation:$('[name=image_moderation]',form).value,
+        image_output_format:$('[name=image_output_format]',form).value,
+        prompt_api_base_url:$('[name=prompt_api_base_url]',form).value,
+        prompt_api_key:$('[name=prompt_api_key]',form).value,
+        prompt_model:$('[name=prompt_model]',form).value,
+        generation_concurrency:$('[name=generation_concurrency]',form).value,
+        api_timeout_seconds:$('[name=api_timeout_seconds]',form).value,
+        max_upload_mb:$('[name=max_upload_mb]',form).value,
+        mock_mode:$('[name=mock_mode]',form).checked,
+        runtime:{group_constraints,task_briefs,function_templates}
+      };
+      const button=$('button[type=submit]',form);
+      button.disabled=true;
+      button.textContent='保存中…';
+      try {
+        const saved=await api('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+        state.functionTemplates=saved.function_templates||saved.size_templates||[];
+        toast('设置已保存到本地配置文件并立即生效');
+        await showSettings();
+      } catch(e) {
+        toast(e.message);
+        button.disabled=false;
+        button.textContent='保存设置';
+      }
     }
 
     async function loadProjects() { state.projects = await api('/api/projects'); renderSidebar(); }
@@ -177,7 +261,7 @@
     function addExtra() { const list=$('#extra-list'); if(!list) return; const index=list.children.length; const row=document.createElement('div'); row.className='extra-row'; row.innerHTML=`<div class="extra-num">${index+1}</div><div class="extra-fields"><input class="extra-files" data-index="${index}" type="file" accept=".jpg,.jpeg,.png,.webp" multiple><textarea class="extra-requirement">参考上传的额外图片进行构图与氛围迁移，保持产品外观、颜色、比例和细节不变。</textarea></div><button type="button" class="remove-extra" data-action="remove-extra" title="删除">×</button>`; list.appendChild(row); }
     async function submitProject(form) { const fd=new FormData(form); const selected=$$('input[name=task_choice]:checked', form).map(x=>x.value); fd.set('enabled_tasks', JSON.stringify(selected)); const extras=[]; $$('.extra-row',form).forEach((row,i)=>{ const files=$('.extra-files',row); const key=`extra_${i}`; extras.push({upload_key:key, requirement:$('.extra-requirement',row).value}); [...(files.files||[])].forEach(file=>fd.append(key,file)); }); fd.set('extra_requests',JSON.stringify(extras)); const button=$('button[type=submit]',form); button.disabled=true; button.textContent='正在创建…'; try { const result=await api('/api/projects',{method:'POST',body:fd}); toast('项目已创建，生成任务已启动'); await openProject(result.id); } catch(e) { toast(e.message); button.disabled=false; button.textContent='开始生成'; } }
     function projectStats(tasks) { return {total:tasks.length, ready:tasks.filter(t=>['ready','approved'].includes(t.status)).length, approved:tasks.filter(t=>t.status==='approved').length, failed:tasks.filter(t=>t.status==='failed').length, generating:tasks.filter(t=>['generating','queued'].includes(t.status)).length}; }
-     function taskLogic(task) { return task.prompt_group==='size' ? '尺寸展示' : task.prompt_group==='atmosphere' || task.prompt_group==='placement' ? '氛围摆放' : task.prompt_group==='scene' || task.prompt_group==='usage_scene' ? '使用场景' : '额外参考图'; }
+     function taskLogic(task) { return task.prompt_group==='size' || task.prompt_group==='function' ? '尺寸展示' : task.prompt_group==='atmosphere' || task.prompt_group==='placement' ? '氛围摆放' : task.prompt_group==='scene' || task.prompt_group==='usage_scene' ? '使用场景' : '额外参考图'; }
      function renderWorkspace() { const p=state.project; if(!p) return; const s=projectStats(p.tasks); $('#page-title').textContent=p.product_name; $('#page-subtitle').textContent=`项目创建于 ${date(p.created_at)} · ${p.status}`; renderSidebar(); const progress=s.total?Math.round(s.approved/s.total*100):0; const groups=[['尺寸展示',p.tasks.filter(t=>taskLogic(t)==='尺寸展示')],['氛围摆放',p.tasks.filter(t=>taskLogic(t)==='氛围摆放')],['使用场景',p.tasks.filter(t=>taskLogic(t)==='使用场景')],['额外参考图',p.tasks.filter(t=>taskLogic(t)==='额外参考图')]].filter(([,tasks])=>tasks.length); $('#view').innerHTML=`<div class="panel"><div class="workspace-head"><div><div class="eyebrow">PROJECT WORKSPACE</div><h2>${esc(p.product_name)}</h2><p>${esc(p.product_description||'未填写产品描述')} · 每张图独立生成完整中文描述词</p></div><div class="head-actions"><button class="btn btn-light" data-action="refresh">刷新状态</button><button class="btn btn-ghost" data-action="refresh-prompts">重新分析全部描述词</button>${s.failed?'<button class="btn btn-danger" data-action="retry-failed">批量重试失败</button>':''}<a class="btn btn-ghost" href="/api/export?project=${encodeURIComponent(p.id)}">导出最终图</a><button class="btn btn-danger" data-action="delete-project">删除项目</button></div></div><div class="stats"><div class="stat"><b>${s.total}</b><span>任务总数</span></div><div class="stat"><b>${s.ready}</b><span>已生成</span></div><div class="stat"><b>${s.approved}</b><span>已确认</span></div><div class="stat"><b>${s.generating}</b><span>生成中</span></div><div class="stat"><b>${s.failed}</b><span>失败</span></div></div><div class="progress-line"><i style="width:${progress}%"></i></div><p>${progress}% 已确认 · 每张图均单独保存完整提示词和版本记录</p><div class="ref-strip"><img class="ref-thumb" src="${fileUrl(p.id,p.input_product_path)}"><div><h3>stt 手托比例参考图</h3><p>${p.is_series?'系列品：只锁定手与产品的真实大小比例，不参与产品外观判断。':'单品：同时锁定产品外观和手与产品的真实大小比例。'}</p></div></div>${p.is_series&&p.input_series_path?'<div class="ref-strip"><img class="ref-thumb" src="'+fileUrl(p.id,p.input_series_path)+'"><div><h3>cpt 系列外观参考图</h3><p>系列品的唯一产品外观锚点。</p></div></div>':''}</div>${groups.map(([name,tasks])=>`<section class="logic-section"><h3>${name} <span class="hint">${tasks.length} 张</span></h3><div class="task-grid">${tasks.map(renderTaskCard).join('')}</div></section>`).join('')}`; }
      function renderTaskCard(task) { const versions=task.versions||[]; const latest=versions.length?versions[versions.length-1].id:''; const defaultVersion=task.status==='approved'?task.selected_version_id:latest; const selected=state.viewVersions[task.id] || defaultVersion; const version=versions.find(v=>v.id===selected) || versions[versions.length-1]; const busy=['queued','generating'].includes(task.status); const img=version?`<img src="${fileUrl(state.project.id,version.file_path)}&v=${encodeURIComponent(version.created_at)}" alt="${esc(task.task_name)}">`:'<div class="image-placeholder">等待生成第一版图片</div>'; const statusText={queued:'排队中',generating:'生成中',ready:'待审核',approved:'已确认',failed:'失败',pending:'待处理'}[task.status]||task.status; return `<article class="task-card ${task.task_kind==='extra'?'extra':''}" data-task="${task.id}"><div class="card-top"><h3><span class="task-id">${esc(task.slot_id)}</span>${esc(task.task_name)} <span class="hint">· ${taskLogic(task)}</span></h3><span class="status ${task.status}">${statusText}</span></div><div class="image-box">${img}</div><div class="card-body"><div class="version-row"><span>${version?`当前查看：v${String(version.version_number).padStart(2,'0')} · ${esc(version.mode)}`:'暂无版本'}</span>${versions.length?`<select class="version-select" data-action="view-version">${versions.map(v=>`<option value="${v.id}" ${v.id===selected?'selected':''}>v${String(v.version_number).padStart(2,'0')} · ${v.mode}${v.is_approved?' · 已确认':''}</option>`).join('')}</select>`:''}</div><textarea class="prompt-input" placeholder="完整中文描述词">${esc(state.promptDrafts[task.id] ?? task.current_prompt ?? '')}</textarea><textarea class="edit-input edit-box" placeholder="局部修改要求，例如：将产品缩小 15%，保持其他内容不变">${esc(state.editDrafts[task.id]||'')}</textarea><div class="card-actions"><button class="btn btn-primary" data-action="regenerate" ${busy?'disabled':''}>修改描述词重新生成</button><button class="btn btn-ghost" data-action="edit" ${busy||!version?'disabled':''}>直接编辑当前图片</button><button class="btn btn-light" data-action="approve" ${busy||!version?'disabled':''}>确认当前版本</button><button class="btn btn-light" data-action="download" ${!version?'disabled':''}>下载</button>${task.status==='failed'?'<button class="btn btn-danger" data-action="retry">重试</button>':''}</div>${task.last_error?`<div class="error">${esc(task.last_error)}</div>`:''}<div class="card-foot">${versions.length?`历史版本 ${versions.length} 个 · 父版本链可追溯`:'尚未产生版本'}${task.task_kind==='extra'?' · 本图来自额外参考图需求':''}</div></div></article>`; }
     async function openProject(id) { clearInterval(state.poll); if(state.project?.id!==id) { state.promptDrafts={}; state.editDrafts={}; } state.project=await api(`/api/projects/${id}`); renderWorkspace(); state.poll=setInterval(async()=>{ if(!state.project) return; try { const updated=await api(`/api/projects/${state.project.id}`); state.project=updated; const active=document.activeElement; if(!active?.matches('.prompt-input,.edit-input')) renderWorkspace(); } catch(e){} },2200); }
@@ -186,10 +270,64 @@
      async function retryFailed(button) { if(!state.project) return; button.disabled=true; button.textContent='重新生成中…'; try { await api(`/api/projects/${state.project.id}/retry-failed`,{method:'POST'}); toast('失败任务已批量重新排队'); } catch(e) { toast(e.message); button.disabled=false; button.textContent='批量重试失败'; } }
      async function submitSettings(form) { const task_briefs={}; $$('.settings-task',form).forEach(el=>task_briefs[el.dataset.taskId]=el.value); const group_constraints={}; $('.group-constraint',form).forEach(el=>group_constraints[el.dataset.group]=el.value); const size_templates=$('.size-template-row',form).map(row=>({id:row.dataset.templateId,name:$('.size-template-name',row).value,prompt:$('.size-template-prompt',row).value})); const payload={output_root:$('[name=output_root]',form).value,image_api_base_url:$('[name=image_api_base_url]',form).value,image_api_key:$('[name=image_api_key]',form).value,image_model:$('[name=image_model]',form).value,image_size:$('[name=image_size]',form).value,image_quality:$('[name=image_quality]',form).value,image_moderation:$('[name=image_moderation]',form).value,image_output_format:$('[name=image_output_format]',form).value,prompt_api_base_url:$('[name=prompt_api_base_url]',form).value,prompt_api_key:$('[name=prompt_api_key]',form).value,prompt_model:$('[name=prompt_model]',form).value,generation_concurrency:$('[name=generation_concurrency]',form).value,api_timeout_seconds:$('[name=api_timeout_seconds]',form).value,max_upload_mb:$('[name=max_upload_mb]',form).value,mock_mode:$('[name=mock_mode]',form).checked,runtime:{group_constraints,task_briefs,size_templates}}; const button=$('button[type=submit]',form); button.disabled=true; button.textContent='保存中…'; try { await api('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); toast('设置已保存并立即生效'); await showSettings(); } catch(e) { toast(e.message); button.disabled=false; button.textContent='保存设置'; } }
     $('#top-new').onclick=showNew; $('#side-new').onclick=showNew; $('#side-settings').onclick=showSettings;
+    function ensureImageQualitySelect() {
+      const input=$('input[name="image_quality"]');
+      if(!input) return;
+      const labels={
+        auto:'自动（由模型决定）',
+        low:'低（速度快、成本低）',
+        medium:'中（推荐，质量与成本平衡）',
+        high:'高（细节最好、成本最高）'
+      };
+      const select=document.createElement('select');
+      select.name='image_quality';
+      select.innerHTML=Object.entries(labels).map(([value,label])=>`<option value="${value}" ${input.value===value?'selected':''}>${label}</option>`).join('');
+      input.replaceWith(select);
+    }
+    const settingsViewObserver=new MutationObserver(ensureImageQualitySelect);
+    settingsViewObserver.observe($('#view'),{childList:true,subtree:true});
+    function ensureWorkspaceFunctionLabels() {
+      $$('.logic-section > h3').forEach(el=>{
+        if(el.firstChild?.nodeType===Node.TEXT_NODE && el.firstChild.textContent.trim()==='尺寸展示') el.firstChild.textContent='功能图 ';
+      });
+      $$('.task-card .hint').forEach(el=>{
+        if(el.textContent.trim()==='· 尺寸展示') el.textContent='· 功能图';
+      });
+    }
+    const projectViewObserver=new MutationObserver(()=>{
+      ensureNewProjectEnhancements().catch(e=>toast(e.message));
+      ensureWorkspaceFunctionLabels();
+    });
+    projectViewObserver.observe($('#view'),{childList:true,subtree:true});
+    document.addEventListener('click', e=>{
+      const btn=e.target.closest?.('[data-action]');
+      if(!btn) return;
+      if(btn.dataset.action==='add-function') addFunctionRequest();
+      if(btn.dataset.action==='remove-function') {
+        btn.closest('.function-request-row')?.remove();
+        $$('.function-request-row').forEach((row,i)=>$('.extra-num',row).textContent=i+1);
+      }
+    },true);
+    document.addEventListener('submit', e=>{
+      if(e.target.id!=='project-form') return;
+      const form=e.target;
+      const requests=$$('.function-request-row',form).map(row=>({
+        template_id:$('.function-template-select',row).value,
+        name:$('.function-task-name',row).value
+      }));
+      let field=$('input[name="function_requests"]',form);
+      if(!field) {
+        field=document.createElement('input');
+        field.type='hidden';
+        field.name='function_requests';
+        form.appendChild(field);
+      }
+      field.value=JSON.stringify(requests);
+    },true);
     document.addEventListener('input', e=>{ const card=e.target.closest?.('[data-task]'); if(!card) return; const taskId=card.dataset.task; if(e.target.matches('.prompt-input')) state.promptDrafts[taskId]=e.target.value; if(e.target.matches('.edit-input')) state.editDrafts[taskId]=e.target.value; });
      document.addEventListener('click', async e=>{ const open=e.target.closest('[data-open]'); if(open) return openProject(open.dataset.open); const btn=e.target.closest('[data-action]'); if(!btn) return; const action=btn.dataset.action; if(action==='prompt-tab') { const section=btn.closest('.section'); $$('.logic-tab',section).forEach(el=>el.classList.toggle('active',el.dataset.group===btn.dataset.group)); $$('.constraint-panel',section).forEach(el=>el.classList.toggle('active',el.dataset.promptPanel===btn.dataset.group)); return; } if(action==='add-size-template') return addSizeTemplate(); if(action==='remove-size-template') { const rows=$('.size-template-row'); if(rows.length<=1) return toast('至少保留一个尺寸图模板'); btn.closest('.size-template-row').remove(); return; } if(action==='new') return showNew(); if(action==='home') { state.project=null; renderSidebar(); showEmpty(); return; } if(action==='add-extra') return addExtra(); if(action==='remove-extra') { btn.closest('.extra-row').remove(); $$('.extra-row').forEach((row,i)=>$('.extra-num',row).textContent=i+1); return; } if(action==='toggle-tasks') { const boxes=$$('input[name=task_choice]'); const all=boxes.every(x=>x.checked); boxes.forEach(x=>x.checked=!all); return; } if(action==='refresh' && state.project) { state.project=await api(`/api/projects/${state.project.id}`); renderWorkspace(); return; } if(action==='refresh-prompts') return refreshPrompts(btn); if(action==='retry-failed') return retryFailed(btn); if(action==='delete-project' && state.project && confirm('确定软删除这个项目吗？图片不会立即清理。')) { await api(`/api/projects/${state.project.id}`,{method:'DELETE'}); toast('项目已移入回收状态'); state.project=null; await loadProjects(); showEmpty(); return; } const card=btn.closest('[data-task]'); if(card && ['regenerate','edit','approve','retry','download'].includes(action)) return act(action,card); });
     document.addEventListener('change', e=>{ if(e.target.matches('[name="is_series"]')) { const input=$('[name="series_image"]',e.target.form); const hint=$('.series-reference-hint',e.target.form); const series=e.target.value==='1'; if(input) input.required=series; if(hint) hint.textContent=series?'系列品必填；锁定具体产品外观':'单品不使用；系列品必填并锁定具体产品外观'; } if(e.target.matches('[data-action="view-version"]')) { state.viewVersions[e.target.closest('[data-task]').dataset.task]=e.target.value; renderWorkspace(); } });
-    document.addEventListener('submit', e=>{ if(e.target.id==='project-form'){e.preventDefault(); submitProject(e.target);} if(e.target.id==='settings-form'){e.preventDefault(); submitSettings(e.target);} });
+    document.addEventListener('submit', e=>{ if(e.target.id==='project-form'){e.preventDefault(); submitProject(e.target);} if(e.target.id==='settings-form'){e.preventDefault(); submitSettingsFixed(e.target);} });
     (async()=>{ try { await loadProjects(); if(state.projects.length) await openProject(state.projects[0].id); else showEmpty(); } catch(e){toast(e.message);} })();
   </script>
 </body>

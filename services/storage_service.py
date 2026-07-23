@@ -8,6 +8,7 @@ import shutil
 import tempfile
 import uuid
 import zipfile
+from datetime import date
 from pathlib import Path
 
 
@@ -101,6 +102,48 @@ class StorageService:
             raise
         return target
 
+    def export_final_bundle(
+        self,
+        project_dir: Path,
+        product_name: str,
+        files: list[Path],
+        export_date: date | None = None,
+    ) -> tuple[Path, Path]:
+        """Copy selected final images to a dated folder and also build the download ZIP."""
+        day = (export_date or date.today()).strftime("%Y-%m-%d")
+        base_name = f"{safe_name(product_name, 'product')}_{day}"
+        export_dir = (self.output_root / base_name).resolve()
+        self._assert_inside(export_dir, self.output_root)
+        suffix = 2
+        while export_dir.exists():
+            export_dir = (self.output_root / f"{base_name}_{suffix:02d}").resolve()
+            self._assert_inside(export_dir, self.output_root)
+            suffix += 1
+        export_dir.mkdir(parents=True, exist_ok=False)
+
+        copied: list[Path] = []
+        for index, file in enumerate(files, 1):
+            if not file.exists() or not file.is_file():
+                continue
+            target = export_dir / file.name
+            if target.exists():
+                target = export_dir / f"{index:02d}_{file.name}"
+            shutil.copy2(file, target)
+            copied.append(target)
+
+        archive = project_dir / f"{safe_name(export_dir.name)}_final.zip"
+        with tempfile.NamedTemporaryFile(prefix=".zip_", dir=project_dir, delete=False) as temp:
+            temp_path = Path(temp.name)
+        try:
+            with zipfile.ZipFile(temp_path, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                for file in copied:
+                    zip_file.write(file, arcname=file.name)
+            temp_path.replace(archive)
+        except Exception:
+            temp_path.unlink(missing_ok=True)
+            raise
+        return archive, export_dir
+
 
 def read_image_info(content: bytes) -> dict[str, str | int]:
     """Lightweight validation/info extraction; Pillow is optional."""
@@ -135,4 +178,3 @@ def make_mock_png(seed: str, size: int = 512) -> bytes:
         return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
 
     return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw, 6)) + chunk(b"IEND", b"")
-

@@ -102,8 +102,11 @@ class PromptService:
     def group_constraints(self) -> dict[str, str]:
         return self.config_store.group_constraints()
 
+    def function_templates(self) -> list[dict[str, str]]:
+        return self.config_store.function_templates()
+
     def size_templates(self) -> list[dict[str, str]]:
-        return self.config_store.size_templates()
+        return self.function_templates()
 
     def constraints_for(self, prompt_group: str) -> str:
         return self.config_store.constraint_for(prompt_group)
@@ -142,7 +145,7 @@ class PromptService:
 
     @staticmethod
     def _logic_name(item: dict[str, Any]) -> str:
-        return str(item.get("logic") or {"placement": "氛围摆放", "usage_scene": "使用场景", "scene": "使用场景", "size": "尺寸展示"}.get(item.get("prompt_group"), "电商图片"))
+        return str(item.get("logic") or {"placement": "氛围摆放", "usage_scene": "使用场景", "scene": "使用场景", "size": "功能图", "function": "功能图"}.get(item.get("prompt_group"), "电商图片"))
 
     @staticmethod
     def _usable_prompt(value: Any) -> bool:
@@ -156,7 +159,7 @@ class PromptService:
     @staticmethod
     def _required_reference_labels(item: dict[str, Any]) -> tuple[str, ...]:
         group = str(item.get("prompt_group") or "")
-        if group in {"size", "scene"}:
+        if group in {"size", "function", "scene"}:
             return ("【产品外观参考图】", "【手托比例参考图】")
         if group == "atmosphere":
             return ("【产品外观参考图】",)
@@ -250,8 +253,8 @@ class PromptService:
             inputs["产品尺寸"] = project.get("product_dimensions") or "未提供尺寸数值，真实比例仍以手托比例参考图为准"
             if item.get("id") == "11":
                 inputs["自定义使用场景"] = project.get("custom_scene") or "自然真实的日常使用场景"
-        elif group == "size":
-            inputs["产品尺寸"] = project.get("product_dimensions") or "未提供，不得编造数值，只保留三根尺寸线"
+        elif group in {"size", "function"}:
+            inputs["产品尺寸"] = project.get("product_dimensions") or "未提供尺寸数值；只有模板明确需要尺寸时才使用，且不得编造"
         return inputs
 
     @staticmethod
@@ -347,6 +350,44 @@ class PromptService:
         )
         return self._normalize_chinese_prompt(prompt)
 
+    def generate_function_prompt(
+        self,
+        project: dict[str, Any],
+        template: dict[str, str],
+        stt_path: Path,
+        cpt_path: Path | None = None,
+    ) -> str:
+        """Rewrite one user-selected function template with the prompt model."""
+        definition = {
+            "id": "99",
+            "name": str(template.get("name") or "追加功能图"),
+            "prompt_group": "function",
+            "logic": "功能图",
+            "reference_fields": ["stt", "cpt"],
+            "brief": str(template.get("prompt") or ""),
+        }
+        local = self._canonicalize_reference_labels(
+            self._normalize_chinese_prompt(self.render_template(definition["brief"], project), allow_size_labels=True),
+            definition,
+        )
+        if not (
+            self.settings.prompt_api_base_url
+            and self.settings.prompt_api_key
+            and self.settings.prompt_model
+            and stt_path.exists()
+        ):
+            return local
+        try:
+            image_inputs = self._analysis_image_inputs(project, stt_path, cpt_path)
+            result = self._request_prompts(project, image_inputs, [definition], ["99"])
+            candidate = self._clean_prompt(result.get("99", ""), allow_size_labels=True)
+            candidate = self._canonicalize_reference_labels(candidate, definition)
+            if self._usable_prompt(candidate) and self._reference_labels_valid(candidate, definition):
+                return candidate
+        except Exception:
+            pass
+        return local
+
     @staticmethod
     def _analysis_image_inputs(project: dict[str, Any], stt_path: Path, cpt_path: Path | None = None) -> list[dict[str, Any]]:
         if project.get("is_series"):
@@ -369,21 +410,22 @@ class PromptService:
         if len(groups) != 1:
             raise ValueError("每次描述词分析只能处理一种工作流类型")
         prompt_group = str(items[0]["prompt_group"]) if items else "atmosphere"
-        size_template = self.config_store.size_template(project.get("size_template_id")) if prompt_group == "size" else None
+        selected_template = self.config_store.function_template(project.get("size_template_id")) if prompt_group == "size" else None
+        template_mode = prompt_group in {"size", "function"}
 
         def selected_requirement(item: dict[str, Any]) -> str:
-            if size_template:
-                return str(size_template["prompt"])
+            if selected_template:
+                return str(selected_template["prompt"])
             return str(item["brief"])
 
         output_requirement = (
-            "必须为尺寸图生成一条独立、完整、可直接用于图片生成的描述词。只返回JSON对象，键必须是两位任务编号，"
-            "描述词主体使用中文；仅保留画面必须显示的PRODUCT SIZE、cm、inch这三类英文标签，其他内容不得使用英文字母。"
+            "必须按照当前功能图模板生成一条独立、完整、可直接用于图片生成的描述词。只返回JSON对象，键必须是两位任务编号，"
+            "描述词主体必须使用中文；模板明确要求画面显示的英文标题、单位或标签可以原样保留，除此之外不要夹带英文说明。"
             "不得输出Markdown、解释、备注或编号标签。严禁描述、猜测或创造产品的颜色、造型、图案、结构、材质等外观细节，"
             "只能指向对应参考图。必须在最终描述词中原样保留【产品外观参考图】和【手托比例参考图】标准标签，"
             "禁止改写成随附图片、输入照片、上传图片、参考照片或类似泛化说法。参考图变量约束只用于理解输入图片角色，禁止复制内部规则标题。"
             "单品的外观和比例都以手托比例参考图为准；系列品外观只能由系列外观参考图锚定，手托比例参考图只控制大小比例。"
-            if size_template
+            if template_mode
             else "必须为任务列表中的每一个编号分别生成一条独立、完整、可直接用于图片生成的中文描述词。绝对不能合并、跳过、复用或省略任何一张图。只返回JSON对象，键必须是两位任务编号，值必须是全中文描述词；单位写作厘米和英寸，不要使用英文字母，不要输出Markdown、解释、备注或编号标签。最终描述词必须原样保留该任务所需的【产品外观参考图】和【手托比例参考图】标准标签，禁止将标准标签改写成随附图片、输入照片、上传图片、参考照片或类似泛化说法。参考图变量约束只用于你理解输入图片角色，禁止把【参考图变量约束】标题或整段内部规则复制到输出描述词开头。每张图只能使用该任务自己的用户输入，严禁把其他图片类型或其他编号的用户输入混入本图。单品的外观和比例都以手托比例参考图为准；系列品的外观只能由系列外观参考图锚定，手托比例参考图只控制大小比例，不得覆盖外观。"
         )
 
@@ -399,15 +441,15 @@ class PromptService:
                     "逻辑": self._logic_name(item),
                     "内置描述词模板": selected_requirement(item),
                     "渲染后的内置要求": self.render_template(selected_requirement(item), project),
-                    "尺寸图模板名称": size_template["name"] if size_template else None,
+                    "功能图模板名称": selected_template["name"] if selected_template else (item["name"] if prompt_group == "function" else None),
                     "参考图变量约束": self._reference_variable_contract(project, item),
                     "仅供本图使用的用户输入": self._task_user_inputs(project, item),
                 }
                 for item in items
             ],
             "当前图片类型": self._logic_name(items[0]) if items else "电商图片",
-            "本类型专属全局规则模板": "尺寸图不使用额外全局约束" if size_template else self.constraints_for(prompt_group),
-            "渲染后的本类型专属全局规则": "尺寸图只使用当前选择的完整模板要求" if size_template else self.render_template(self.constraints_for(prompt_group), project),
+            "本类型专属全局规则模板": "功能图不使用额外全局约束" if template_mode else self.constraints_for(prompt_group),
+            "渲染后的本类型专属全局规则": "功能图只使用当前选择的完整模板要求" if template_mode else self.render_template(self.constraints_for(prompt_group), project),
             "输出要求": output_requirement,
         }
         content_parts = [{"type": "text", "text": json.dumps(instruction, ensure_ascii=False)}]

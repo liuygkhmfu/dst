@@ -13,7 +13,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from config.runtime_config import PROMPT_GROUPS
-from config.settings import get_settings
+from config.settings import IMAGE_QUALITY_OPTIONS, get_settings
 from config.task_definitions import TASK_DEFINITIONS
 from database.db import Database
 from database.repositories import Repository
@@ -52,8 +52,14 @@ def project_payload(project_id: str) -> dict:
     if not project:
         raise KeyError("项目不存在")
     tasks = [clean_task(t) for t in REPO.get_tasks(project_id)]
-    size_template = GENERATOR.config_store.size_template(project.get("size_template_id"))
-    return {**project, "size_template_name": size_template["name"], "tasks": tasks, "extra_requests": REPO.get_extra_requests(project_id)}
+    function_template = GENERATOR.config_store.function_template(project.get("size_template_id"))
+    return {
+        **project,
+        "function_template_name": function_template["name"],
+        "size_template_name": function_template["name"],
+        "tasks": tasks,
+        "extra_requests": REPO.get_extra_requests(project_id),
+    }
 
 
 def masked_secret(value: str) -> str:
@@ -77,6 +83,7 @@ def settings_payload() -> dict:
         "image_model": SETTINGS.image_model,
         "image_size": SETTINGS.image_size,
         "image_quality": SETTINGS.image_quality,
+        "image_quality_options": list(IMAGE_QUALITY_OPTIONS),
         "image_output_format": SETTINGS.image_output_format,
         "image_background": SETTINGS.image_background,
         "image_moderation": SETTINGS.image_moderation,
@@ -91,7 +98,8 @@ def settings_payload() -> dict:
         "image_key_masked": masked_secret(SETTINGS.image_api_key),
         "prompt_key_masked": masked_secret(SETTINGS.prompt_api_key),
         "group_constraints": GENERATOR.config_store.group_constraints(),
-        "size_templates": GENERATOR.config_store.size_templates(),
+        "function_templates": GENERATOR.config_store.function_templates(),
+        "size_templates": GENERATOR.config_store.function_templates(),
         "prompt_groups": [
             {"key": key, **PROMPT_GROUPS[key]}
             for key in ("size", "atmosphere", "scene")
@@ -125,6 +133,11 @@ def save_env_values(updates: dict[str, str]) -> None:
 
 def apply_settings(payload: dict) -> dict:
     global SETTINGS, STORAGE
+    if "image_quality" in payload:
+        image_quality = str(payload.get("image_quality") or "").strip().lower()
+        if image_quality not in IMAGE_QUALITY_OPTIONS:
+            raise ValueError("图片质量只能选择 auto、low、medium 或 high")
+        payload = {**payload, "image_quality": image_quality}
     env_updates: dict[str, str] = {}
     mapping = {
         "output_root": "OUTPUT_ROOT",
@@ -148,12 +161,14 @@ def apply_settings(payload: dict) -> dict:
     runtime = payload.get("runtime", {}) if isinstance(payload.get("runtime"), dict) else payload
     task_briefs = runtime.get("task_briefs")
     group_constraints = runtime.get("group_constraints")
-    size_templates = runtime.get("size_templates")
-    if task_briefs is not None or group_constraints is not None or size_templates is not None:
+    function_templates = runtime.get("function_templates")
+    if function_templates is None:
+        function_templates = runtime.get("size_templates")
+    if task_briefs is not None or group_constraints is not None or function_templates is not None:
         GENERATOR.config_store.save(
             group_constraints=group_constraints,
             task_briefs=task_briefs,
-            size_templates=size_templates,
+            function_templates=function_templates,
         )
     SETTINGS = get_settings(ROOT)
     STORAGE = StorageService(SETTINGS.output_root)
@@ -267,8 +282,15 @@ class Handler(BaseHTTPRequestHandler):
                     version = next((v for v in versions if v["id"] == selected), None) or (versions[-1] if versions else None)
                     if version:
                         files.append(STORAGE.resolve_relative(project_dir, version["file_path"]))
-                archive = STORAGE.export_final_zip(project_dir, files)
-                self.send_data(archive.read_bytes(), "application/zip", headers={"Content-Disposition": content_disposition("attachment", archive.name)})
+                archive, export_dir = STORAGE.export_final_bundle(project_dir, project["product_name"], files)
+                self.send_data(
+                    archive.read_bytes(),
+                    "application/zip",
+                    headers={
+                        "Content-Disposition": content_disposition("attachment", archive.name),
+                        "X-Export-Folder": quote(str(export_dir), safe=":/\\"),
+                    },
+                )
                 return
             self.error("Not Found", 404)
         except KeyError as exc:

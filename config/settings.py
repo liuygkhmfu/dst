@@ -5,6 +5,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+IMAGE_QUALITY_OPTIONS = ("auto", "low", "medium", "high")
+
+
+def normalize_image_quality(value: str, fallback: str = "low") -> str:
+    quality = str(value or "").strip().lower()
+    return quality if quality in IMAGE_QUALITY_OPTIONS else fallback
+
+
 def load_dotenv(path: Path) -> None:
     """Load a small .env subset without requiring python-dotenv at runtime."""
     if not path.exists():
@@ -54,7 +62,7 @@ def get_settings(root_dir: Path | None = None) -> Settings:
         image_api_key=os.getenv("IMAGE_API_KEY", "").strip(),
         image_model=os.getenv("IMAGE_MODEL", "gpt-image-2").strip(),
         image_size=os.getenv("IMAGE_SIZE", "1024x1024").strip(),
-        image_quality=os.getenv("IMAGE_QUALITY", "low").strip(),
+        image_quality=normalize_image_quality(os.getenv("IMAGE_QUALITY", "low")),
         image_output_format=os.getenv("IMAGE_OUTPUT_FORMAT", "png").strip(),
         image_background=os.getenv("IMAGE_BACKGROUND", "auto").strip(),
         image_moderation=os.getenv("IMAGE_MODERATION", "auto").strip(),
