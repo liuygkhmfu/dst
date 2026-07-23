@@ -68,7 +68,7 @@ def test_extra_reference_request_creates_independent_task(tmp_path: Path):
     assert all(len(task["versions"]) == 1 for task in tasks)
     assert len(repo.get_extra_requests(project_id)[0]["reference_paths"]) == 1
     extra_task = next(task for task in tasks if task["slot_id"] == "XR-01")
-    assert extra_task["current_prompt"].startswith("【参考图变量约束】")
+    assert not extra_task["current_prompt"].startswith("【参考图变量约束】")
     extra_usage = json.loads(extra_task["versions"][0]["api_usage_json"])
     assert [item["label"] for item in extra_usage["reference_inputs"]] == ["手托比例参考图", "额外需求参考图1"]
     assert "输入参考图1＝【手托比例参考图】" in extra_task["versions"][0]["prompt"]
@@ -89,8 +89,10 @@ def test_series_uses_cpt_for_appearance_and_stt_only_for_scale(tmp_path: Path):
     task = repo.get_tasks(project_id)[0]
     usage = json.loads(task["versions"][0]["api_usage_json"])
     assert [item["label"] for item in usage["reference_inputs"]] == ["系列外观参考图", "手托比例参考图"]
+    assert not task["current_prompt"].startswith("【参考图变量约束】")
     assert "【系列外观参考图】" in task["current_prompt"]
-    assert "不得用手托比例参考图覆盖或改写系列外观参考图" in task["current_prompt"]
+    assert "【手托比例参考图】只控制手与产品的大小比例" in task["versions"][0]["prompt"]
+    assert "不得覆盖或改写系列外观" in task["versions"][0]["prompt"]
 
 
 def test_series_project_requires_cpt_reference(tmp_path: Path):
@@ -135,7 +137,7 @@ def test_local_prompts_keep_three_logics_and_one_prompt_per_image(tmp_path: Path
     assert set(prompts) == {"03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13"}
     assert len(set(prompts.values())) == 11
     assert all(len(value) >= 80 and "Realistic camera" not in value for value in prompts.values())
-    assert all(value.startswith("【参考图变量约束】") for value in prompts.values())
+    assert all(not value.startswith("【参考图变量约束】") for value in prompts.values())
     assert all("【手托比例参考图】" in value for value in prompts.values())
     assert all("【系列外观参考图】" not in value for value in prompts.values())
     assert all("{{" not in value and "}}" not in value for value in prompts.values())
@@ -148,6 +150,15 @@ def test_local_prompts_keep_three_logics_and_one_prompt_per_image(tmp_path: Path
     assert not any(re.search(r"[A-Za-z]", value) for value in prompts.values())
     definitions = service.task_definitions()
     assert {item["logic"] for item in definitions} == {"氛围摆放", "使用场景", "尺寸展示"}
+
+
+def test_legacy_reference_contract_is_removed_from_visible_prompt():
+    contract = (
+        "【参考图变量约束】本项目是单品：内部参考规则。"
+        "这些变量名称只用于指代输入图片，不得作为文字出现在最终画面中。"
+        "真实相机实拍的独立电商图片描述词。"
+    )
+    assert PromptService.strip_reference_variable_contract(contract) == "真实相机实拍的独立电商图片描述词。"
 
 
 def test_prompt_model_is_called_separately_for_three_workflow_groups(tmp_path: Path, monkeypatch):
