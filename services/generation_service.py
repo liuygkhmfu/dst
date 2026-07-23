@@ -128,26 +128,23 @@ class GenerationService:
                 self.start_initial_generation(project["id"])
 
     def migrate_task_metadata(self) -> None:
-        """Keep persisted projects aligned with task metadata and reference-variable contracts."""
+        """Keep persisted projects aligned and remove legacy internal text from visible prompts."""
         definitions = {item["id"]: item for item in self.prompt_service.task_definitions()}
         for project in self.repo.list_projects():
             project_changed = False
             for task in self.repo.get_tasks(project["id"]):
                 definition = definitions.get(task["slot_id"])
-                if task["task_kind"] != "workflow" or not definition:
-                    continue
                 updates: dict[str, Any] = {}
-                if task["task_name"] != definition["name"]:
-                    updates["task_name"] = definition["name"]
-                if task["prompt_group"] != definition["prompt_group"]:
-                    updates["prompt_group"] = definition["prompt_group"]
-                expected_reference_fields = list(definition.get("reference_fields") or [])
-                if task.get("reference_fields") != expected_reference_fields:
-                    updates["reference_fields"] = expected_reference_fields
+                if task["task_kind"] == "workflow" and definition:
+                    if task["task_name"] != definition["name"]:
+                        updates["task_name"] = definition["name"]
+                    if task["prompt_group"] != definition["prompt_group"]:
+                        updates["prompt_group"] = definition["prompt_group"]
+                    expected_reference_fields = list(definition.get("reference_fields") or [])
+                    if task.get("reference_fields") != expected_reference_fields:
+                        updates["reference_fields"] = expected_reference_fields
                 for field in ("original_prompt", "current_prompt"):
-                    prompt = self.prompt_service._with_reference_variable_contract(
-                        str(task.get(field) or ""), project, definition
-                    )
+                    prompt = self.prompt_service.strip_reference_variable_contract(str(task.get(field) or ""))
                     if prompt != str(task.get(field) or ""):
                         updates[field] = prompt
                 if updates:
@@ -304,7 +301,7 @@ class GenerationService:
                     raise ValueError("局部修改要求不能为空")
                 appearance_reference = self.prompt_service.template_values(project)["产品外观参考图"]
                 scale_reference = self.prompt_service.template_values(project)["手托比例参考图"]
-                prompt = f"【参考图变量约束】仅编辑【待编辑成品图】，并使用{appearance_reference}锁定产品外观、使用{scale_reference}锁定真实大小比例。本次只执行以下局部修改：" + change_request.strip() + "。保持原有构图、机位、裁切、背景、道具和光线不变；除本次明确要求外，其他内容全部保持不变。额外参考图不得改变产品的设计、颜色、造型、比例、图案、结构和表面细节。变量名称不得出现在画面中。"
+                prompt = f"基于当前成品图进行局部编辑，使用{appearance_reference}锁定产品外观、使用{scale_reference}锁定真实大小比例。本次只执行以下修改：" + change_request.strip() + "。保持原有构图、机位、裁切、背景、道具和光线不变；除本次明确要求外，其他内容全部保持不变。额外参考图不得改变产品的设计、颜色、造型、比例、图案、结构和表面细节。变量名称不得出现在画面中。"
             version_number = self.repo.next_version_number(task_id)
             self.repo.update_task(task_id, status="generating", last_error="")
             reference_inputs = self._reference_inputs(project, task, project_dir, mode)

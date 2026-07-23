@@ -166,6 +166,7 @@ class PromptService:
         text = str(value or "").strip().strip("`").strip()
         text = re.sub(r"^(?:提示词|完整描述词|最终描述词)\s*[:：]\s*", "", text)
         text = re.sub(r"^【?图\s*\d{1,2}】?\s*[:：\-]?\s*", "", text)
+        text = cls.strip_reference_variable_contract(text)
         return cls._normalize_chinese_prompt(text).strip()
 
     @staticmethod
@@ -205,13 +206,14 @@ class PromptService:
         return contract + REFERENCE_VARIABLE_END
 
     @classmethod
-    def _with_reference_variable_contract(cls, prompt: str, project: dict[str, Any], item: dict[str, Any]) -> str:
+    def strip_reference_variable_contract(cls, prompt: str) -> str:
+        """Remove a legacy internal contract from a user-visible prompt."""
         text = str(prompt or "").strip()
         if text.startswith(REFERENCE_VARIABLE_MARKER):
             end = text.find(REFERENCE_VARIABLE_END)
             if end >= 0:
                 text = text[end + len(REFERENCE_VARIABLE_END):].lstrip()
-        return cls._reference_variable_contract(project, item) + text
+        return text
 
     def build_local_prompts(self, project: dict[str, Any], enabled_ids: list[str] | None = None) -> dict[str, str]:
         definitions = self.task_definitions()
@@ -257,19 +259,16 @@ class PromptService:
                 f"产品文字信息仅作为材质和使用语境参考：{product}。产品外观、颜色、造型、图案、结构、表面细节和材质表现必须完全以{appearance_reference}为准；手与产品的真实大小比例必须以{scale_reference}为准。提示词不要自行描写或创造产品外观。"
                 "画面比例固定为1:1，产品必须清晰可见且是视觉主体；不得出现与要求无关的文字、标志、畸形手部、虚假光影或明显生成痕迹。"
             )
-            prompts[slot] = self._with_reference_variable_contract(
-                self._normalize_chinese_prompt(prompt), project, item
-            )
+            prompts[slot] = self._normalize_chinese_prompt(prompt).strip()
         return prompts
 
     def build_extra_prompt(self, project: dict[str, Any], requirement: str) -> str:
         product = project.get("product_description") or "参考图中的产品"
-        base_contract = self._reference_variable_contract(project, {}).replace(REFERENCE_VARIABLE_END, "")
         appearance_reference = self.template_values(project)["产品外观参考图"]
         prompt = (
-            f"{base_contract}把本条需求上传的其他图片依次定义为【额外需求参考图】；"
+            "这是单独生成的一张额外参考图需求图片，不能与其他任务合并。"
+            "把本条需求上传的其他图片依次作为【额外需求参考图】；"
             f"【额外需求参考图】只用于本条需求的构图、动作、风格或氛围，发生冲突时必须以{appearance_reference}为外观最高优先级。"
-            f"{REFERENCE_VARIABLE_END}这是单独生成的一张额外参考图需求图片，不能与其他任务合并。"
             "画面采用真实相机摄影，比例固定为1:1，产品必须作为视觉主体；"
             f"本次具体要求是：{requirement.strip()}。产品文字信息仅作为使用语境参考：{product}。"
             "必须保持产品外观设计、颜色、造型、结构、表面细节和大小比例完全不变，不得复制额外参考图中的无关人物、文字、标志或背景。"
@@ -318,7 +317,7 @@ class PromptService:
             "当前图片类型": self._logic_name(items[0]) if items else "电商图片",
             "本类型专属全局规则模板": self.constraints_for(prompt_group),
             "渲染后的本类型专属全局规则": self.render_template(self.constraints_for(prompt_group), project),
-            "输出要求": "必须为任务列表中的每一个编号分别生成一条独立、完整、可直接用于图片生成的中文描述词。绝对不能合并、跳过、复用或省略任何一张图。只返回 JSON 对象，键必须是两位任务编号，值必须是全中文描述词；单位写作厘米和英寸，不要使用英文字母，不要输出 Markdown、解释、备注或编号标签。每张图只能使用该任务自己的用户输入，严禁把其他图片类型或其他编号的用户输入混入本图。单品的外观和比例都以手托比例参考图为准；系列品的外观只能由系列外观参考图锚定，手托比例参考图只控制大小比例，不得覆盖外观。",
+            "输出要求": "必须为任务列表中的每一个编号分别生成一条独立、完整、可直接用于图片生成的中文描述词。绝对不能合并、跳过、复用或省略任何一张图。只返回 JSON 对象，键必须是两位任务编号，值必须是全中文描述词；单位写作厘米和英寸，不要使用英文字母，不要输出 Markdown、解释、备注或编号标签。参考图变量约束只用于你理解输入图片角色，禁止把【参考图变量约束】标题或整段内部规则复制到输出描述词开头。每张图只能使用该任务自己的用户输入，严禁把其他图片类型或其他编号的用户输入混入本图。单品的外观和比例都以手托比例参考图为准；系列品的外观只能由系列外观参考图锚定，手托比例参考图只控制大小比例，不得覆盖外观。",
         }
         content_parts = [{"type": "text", "text": json.dumps(instruction, ensure_ascii=False)}]
         content_parts.extend(
@@ -374,11 +373,7 @@ class PromptService:
                     except Exception:
                         continue
             local.update({key: val for key, val in accepted.items() if key in local})
-            definition_map = {item["id"]: item for item in definitions}
-            return {
-                task_id: self._with_reference_variable_contract(local[task_id], project, definition_map[task_id])
-                for task_id in ids
-            }
+            return {task_id: self.strip_reference_variable_contract(local[task_id]) for task_id in ids}
         except Exception:
             # 提示词接口失败时仍返回逐张完整中文模板，不能因为分析接口暂时失败而丢任务或拼出半截提示词。
             return self.build_local_prompts(project, enabled_ids)
