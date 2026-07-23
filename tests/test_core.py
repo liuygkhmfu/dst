@@ -120,8 +120,9 @@ def test_series_uses_cpt_for_appearance_and_stt_only_for_scale(tmp_path: Path):
     usage = json.loads(task["versions"][0]["api_usage_json"])
     assert [item["label"] for item in usage["reference_inputs"]] == ["系列外观参考图", "手托比例参考图"]
     assert not task["current_prompt"].startswith("【参考图变量约束】")
-    assert "【系列外观参考图】" in task["current_prompt"]
+    assert "【产品外观参考图】" in task["current_prompt"]
     assert "【手托比例参考图】只控制手与产品的大小比例" in task["versions"][0]["prompt"]
+    assert "【产品外观参考图】固定等同于输入中的【系列外观参考图】" in task["versions"][0]["prompt"]
     assert "不得覆盖或改写系列外观" in task["versions"][0]["prompt"]
 
 
@@ -174,6 +175,7 @@ def test_local_prompts_keep_three_logics_and_one_prompt_per_image(tmp_path: Path
     assert len(set(prompts.values())) == 11
     assert all(len(value) >= 80 and "Realistic camera" not in value for value in prompts.values())
     assert all(not value.startswith("【参考图变量约束】") for value in prompts.values())
+    assert all("【产品外观参考图】" in value for value in prompts.values())
     assert all("【手托比例参考图】" in value for value in prompts.values())
     assert all("【系列外观参考图】" not in value for value in prompts.values())
     assert all("{{" not in value and "}}" not in value for value in prompts.values())
@@ -200,6 +202,19 @@ def test_legacy_reference_contract_is_removed_from_visible_prompt():
     assert PromptService.strip_reference_variable_contract(contract) == "真实相机实拍的独立电商图片描述词。"
 
 
+def test_image_placeholders_keep_canonical_labels_while_contract_maps_single_and_series(tmp_path: Path):
+    settings = replace(get_settings(tmp_path), data_dir=tmp_path / "data")
+    service = PromptService(settings, RuntimeConfigStore(settings.data_dir))
+    single = {"is_series": 0}
+    series = {"is_series": 1, "input_series_path": "input/series.png"}
+    assert service.render_template("{{产品外观参考图}}；{{手托比例参考图}}", single) == "【产品外观参考图】；【手托比例参考图】"
+    assert service.render_template("{{产品外观参考图}}；{{手托比例参考图}}", series) == "【产品外观参考图】；【手托比例参考图】"
+    single_contract = service._reference_variable_contract(single, {"prompt_group": "scene"})
+    series_contract = service._reference_variable_contract(series, {"prompt_group": "scene"})
+    assert "【产品外观参考图】固定映射为同一张【手托比例参考图】" in single_contract
+    assert "【产品外观参考图】固定映射为【系列外观参考图】" in series_contract
+
+
 def test_prompt_model_is_called_separately_for_three_workflow_groups(tmp_path: Path, monkeypatch):
     settings = replace(
         get_settings(tmp_path),
@@ -216,7 +231,7 @@ def test_prompt_model_is_called_separately_for_three_workflow_groups(tmp_path: P
     def fake_request(project, image_path, definitions, ids):
         calls.append(list(ids))
         return {
-            task_id: f"这是图{task_id}的独立中文描述词，严格执行本类型专属全局约束，保持产品外观参考图中的外观、颜色、结构、比例和材质完全不变。画面构图、主体、环境、光线、动作和摄影要求均完整明确，可直接用于图片生成，并确保每张图片互不合并、互不省略。"
+            task_id: f"这是图{task_id}的独立中文描述词，严格执行本类型专属全局约束，保持【产品外观参考图】中的产品完全不变，并以【手托比例参考图】锁定真实大小比例。画面构图、主体、环境、光线、动作和摄影要求均完整明确，可直接用于图片生成，并确保每张图片互不合并、互不省略。"
             for task_id in ids
         }
 
@@ -224,6 +239,35 @@ def test_prompt_model_is_called_separately_for_three_workflow_groups(tmp_path: P
     prompts = service.generate_prompts({}, image_path)
     assert set(prompts) == {"03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13"}
     assert calls == [["03", "04", "05", "06"], ["07", "08", "09", "10", "11", "12"], ["13"]]
+
+
+def test_generic_gpt_reference_wording_is_retried_then_repaired(tmp_path: Path, monkeypatch):
+    settings = replace(
+        get_settings(tmp_path),
+        data_dir=tmp_path / "data",
+        prompt_api_base_url="https://example.test",
+        prompt_api_key="test-key",
+        prompt_model="gpt-5.5",
+    )
+    service = PromptService(settings, RuntimeConfigStore(settings.data_dir))
+    image_path = tmp_path / "product.png"
+    image_path.write_bytes(make_mock_png("product"))
+    calls: list[list[str]] = []
+
+    def fake_request(project, image_inputs, definitions, ids):
+        calls.append(list(ids))
+        return {
+            task_id: "制作一张完整清晰的尺寸展示图，严格保持随附输入照片中的单品款式和全部细节不变，在统一背景中展示女性手托区域和长宽高尺寸标注区域，构图自然融合，光影真实，尺寸线清晰，禁止创造任何产品细节。"
+            for task_id in ids
+        }
+
+    monkeypatch.setattr(service, "_request_prompts", fake_request)
+    prompt = service.generate_prompts({}, image_path, ["13"])["13"]
+    assert calls == [["13"], ["13"]]
+    assert "随附输入照片" not in prompt
+    assert "【产品外观参考图】" in prompt
+    assert "【手托比例参考图】" in prompt
+    assert service._reference_labels_valid(prompt, next(item for item in service.task_definitions() if item["id"] == "13"))
 
 
 def test_selected_size_template_is_the_only_size_prompt_requirement(tmp_path: Path):

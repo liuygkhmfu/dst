@@ -33,6 +33,17 @@ PROMPT_VARIABLES = [
     {"name": "产品尺寸", "kind": "文字变量", "source": "用户填写的数值信息，用于尺寸图标注；不能替代 stt 比例依据"},
     {"name": "是否系列品", "kind": "文字变量", "source": "项目的单品/系列品选择"},
 ]
+REFERENCE_LABELS = (
+    "【产品外观参考图】",
+    "【手托比例参考图】",
+    "【系列外观参考图】",
+    "【额外需求参考图】",
+)
+GENERIC_REFERENCE_IMAGE_PATTERN = re.compile(
+    r"(?:(?:随附|所附)(?:的)?(?:输入)?|(?:已上传|上传|输入|提供)(?:的)?)"
+    r"(?:第[一二三四五六七八九十\d]+张)?(?:产品)?(?:参考)?(?:照片|图片|图像|图)"
+)
+BARE_REFERENCE_IMAGE_PATTERN = re.compile(r"(?:该|这张)?参考(?:照片|图片|图像|图)(?=(?:中|里|所示))")
 
 
 def _data_url(path: Path) -> str:
@@ -99,12 +110,11 @@ class PromptService:
 
     @staticmethod
     def template_values(project: dict[str, Any]) -> dict[str, str]:
-        is_series = bool(project.get("is_series"))
         scale_reference = "【手托比例参考图】"
         series_appearance = "【系列外观参考图】" if project.get("input_series_path") else "缺少系列外观参考图"
-        appearance_reference = series_appearance if is_series else scale_reference
         return {
-            "产品外观参考图": appearance_reference,
+            # 图片变量保留稳定语义标签；实际映射到 stt/cpt 的关系在多模态请求契约中声明。
+            "产品外观参考图": "【产品外观参考图】",
             "手托比例参考图": scale_reference,
             "系列外观参考图": series_appearance,
             "额外需求参考图": "【额外需求参考图】",
@@ -142,6 +152,49 @@ class PromptService:
         if re.search(r"realistic camera|product description context|this squishy toy|only edit the first input image", text, re.I):
             return False
         return True
+
+    @staticmethod
+    def _required_reference_labels(item: dict[str, Any]) -> tuple[str, ...]:
+        group = str(item.get("prompt_group") or "")
+        if group in {"size", "scene"}:
+            return ("【产品外观参考图】", "【手托比例参考图】")
+        if group == "atmosphere":
+            return ("【产品外观参考图】",)
+        return ()
+
+    @staticmethod
+    def _contains_generic_reference_language(value: Any) -> bool:
+        text = str(value or "")
+        for label in REFERENCE_LABELS:
+            text = text.replace(label, "")
+        return bool(GENERIC_REFERENCE_IMAGE_PATTERN.search(text) or BARE_REFERENCE_IMAGE_PATTERN.search(text))
+
+    @classmethod
+    def _canonicalize_reference_labels(cls, value: Any, item: dict[str, Any]) -> str:
+        text = str(value or "").strip()
+        protected: dict[str, str] = {}
+        for index, label in enumerate(REFERENCE_LABELS, 1):
+            marker = f"【标准参考标签{index}】"
+            protected[marker] = label
+            text = text.replace(label, marker)
+        text = GENERIC_REFERENCE_IMAGE_PATTERN.sub("【产品外观参考图】", text)
+        text = BARE_REFERENCE_IMAGE_PATTERN.sub("【产品外观参考图】", text)
+        for marker, label in protected.items():
+            text = text.replace(marker, label)
+        required = cls._required_reference_labels(item)
+        additions: list[str] = []
+        if "【产品外观参考图】" in required and "【产品外观参考图】" not in text:
+            additions.append("产品外观必须严格以【产品外观参考图】为准，禁止自行描述、猜测或创造产品细节。")
+        if "【手托比例参考图】" in required and "【手托比例参考图】" not in text:
+            additions.append("产品与手部的真实大小比例必须严格以【手托比例参考图】为准。")
+        if additions:
+            text = text.rstrip("。") + "。" + "".join(additions)
+        return text.strip()
+
+    @classmethod
+    def _reference_labels_valid(cls, value: Any, item: dict[str, Any]) -> bool:
+        text = str(value or "")
+        return all(label in text for label in cls._required_reference_labels(item)) and not cls._contains_generic_reference_language(text)
 
     @staticmethod
     def _normalize_chinese_prompt(value: Any, allow_size_labels: bool = False) -> str:
@@ -206,6 +259,7 @@ class PromptService:
         if project.get("is_series"):
             contract = (
                 f"{REFERENCE_VARIABLE_MARKER}本项目是系列品：把实际上传的系列产品外观图片定义为【系列外观参考图】，"
+                "并将【产品外观参考图】固定映射为【系列外观参考图】；"
                 "产品的款式、颜色、造型、图案、结构、表面细节和材质只能由它锚定；"
                 "把实际上传的手托产品图片定义为【手托比例参考图】，只用于锁定手与产品的真实大小比例，"
                 "不得用手托比例参考图覆盖或改写系列外观参考图中的产品外观。"
@@ -213,6 +267,7 @@ class PromptService:
         else:
             contract = (
                 f"{REFERENCE_VARIABLE_MARKER}本项目是单品：把实际上传的手托产品图片定义为【手托比例参考图】，"
+                "并将【产品外观参考图】固定映射为同一张【手托比例参考图】；"
                 "该图片同时是产品外观与手托比例的唯一依据，锁定款式、颜色、造型、图案、结构、比例、表面细节和材质。"
             )
         return contract + REFERENCE_VARIABLE_END
@@ -325,10 +380,11 @@ class PromptService:
             "必须为尺寸图生成一条独立、完整、可直接用于图片生成的描述词。只返回JSON对象，键必须是两位任务编号，"
             "描述词主体使用中文；仅保留画面必须显示的PRODUCT SIZE、cm、inch这三类英文标签，其他内容不得使用英文字母。"
             "不得输出Markdown、解释、备注或编号标签。严禁描述、猜测或创造产品的颜色、造型、图案、结构、材质等外观细节，"
-            "只能指向对应参考图。参考图变量约束只用于理解输入图片角色，禁止复制内部规则标题。"
+            "只能指向对应参考图。必须在最终描述词中原样保留【产品外观参考图】和【手托比例参考图】标准标签，"
+            "禁止改写成随附图片、输入照片、上传图片、参考照片或类似泛化说法。参考图变量约束只用于理解输入图片角色，禁止复制内部规则标题。"
             "单品的外观和比例都以手托比例参考图为准；系列品外观只能由系列外观参考图锚定，手托比例参考图只控制大小比例。"
             if size_template
-            else "必须为任务列表中的每一个编号分别生成一条独立、完整、可直接用于图片生成的中文描述词。绝对不能合并、跳过、复用或省略任何一张图。只返回JSON对象，键必须是两位任务编号，值必须是全中文描述词；单位写作厘米和英寸，不要使用英文字母，不要输出Markdown、解释、备注或编号标签。参考图变量约束只用于你理解输入图片角色，禁止把【参考图变量约束】标题或整段内部规则复制到输出描述词开头。每张图只能使用该任务自己的用户输入，严禁把其他图片类型或其他编号的用户输入混入本图。单品的外观和比例都以手托比例参考图为准；系列品的外观只能由系列外观参考图锚定，手托比例参考图只控制大小比例，不得覆盖外观。"
+            else "必须为任务列表中的每一个编号分别生成一条独立、完整、可直接用于图片生成的中文描述词。绝对不能合并、跳过、复用或省略任何一张图。只返回JSON对象，键必须是两位任务编号，值必须是全中文描述词；单位写作厘米和英寸，不要使用英文字母，不要输出Markdown、解释、备注或编号标签。最终描述词必须原样保留该任务所需的【产品外观参考图】和【手托比例参考图】标准标签，禁止将标准标签改写成随附图片、输入照片、上传图片、参考照片或类似泛化说法。参考图变量约束只用于你理解输入图片角色，禁止把【参考图变量约束】标题或整段内部规则复制到输出描述词开头。每张图只能使用该任务自己的用户输入，严禁把其他图片类型或其他编号的用户输入混入本图。单品的外观和比例都以手托比例参考图为准；系列品的外观只能由系列外观参考图锚定，手托比例参考图只控制大小比例，不得覆盖外观。"
         )
 
         instruction = {
@@ -379,6 +435,7 @@ class PromptService:
             return self.build_local_prompts(project, enabled_ids)
         try:
             definitions = self.task_definitions()
+            definitions_by_id = {item["id"]: item for item in definitions}
             ids = enabled_ids or [item["id"] for item in definitions]
             local = self.build_local_prompts(project, enabled_ids)
             image_inputs = self._analysis_image_inputs(project, image_path, cpt_path)
@@ -395,7 +452,8 @@ class PromptService:
                     prompts = {}
                 for key, value in prompts.items():
                     candidate = self._clean_prompt(value, allow_size_labels=prompt_group == "size")
-                    if key in group_task_ids and key in local and self._usable_prompt(candidate):
+                    item = definitions_by_id.get(key, {})
+                    if key in group_task_ids and key in local and self._usable_prompt(candidate) and self._reference_labels_valid(candidate, item):
                         accepted[key] = candidate
                 missing = [task_id for task_id in group_task_ids if task_id not in accepted]
                 # 若分组返回漏掉任何一个槽位，逐张补问一次，仍然沿用该图所属类型的专属约束。
@@ -403,8 +461,13 @@ class PromptService:
                     try:
                         one = self._request_prompts(project, image_inputs, definitions, [task_id])
                         candidate = self._clean_prompt(one.get(task_id, ""), allow_size_labels=prompt_group == "size")
-                        if self._usable_prompt(candidate):
+                        item = definitions_by_id.get(task_id, {})
+                        if self._usable_prompt(candidate) and self._reference_labels_valid(candidate, item):
                             accepted[task_id] = candidate
+                        else:
+                            repaired = self._canonicalize_reference_labels(candidate, item)
+                            if self._usable_prompt(repaired) and self._reference_labels_valid(repaired, item):
+                                accepted[task_id] = repaired
                     except Exception:
                         continue
             local.update({key: val for key, val in accepted.items() if key in local})
