@@ -26,15 +26,20 @@ class Repository:
     def create_project(self, project: dict[str, Any]) -> None:
         project = dict(project)
         project.setdefault("size_template_id", "size-01")
+        if "postprocess" in project:
+            project["postprocess_json"] = json.dumps(project.pop("postprocess"), ensure_ascii=False)
+        project.setdefault("postprocess_json", "{}")
         with self.db.connection() as conn:
             conn.execute(
                 """INSERT INTO projects
                 (id, product_name, product_description, is_series, product_count,
                  custom_scene, display_requirements, product_dimensions, size_template_id,
-                 input_product_path, input_series_path, output_dir, status, created_at, updated_at)
+                 input_product_path, input_series_path, output_dir, postprocess_json,
+                 status, created_at, updated_at)
                 VALUES (:id,:product_name,:product_description,:is_series,:product_count,
                  :custom_scene,:display_requirements,:product_dimensions,:size_template_id,
-                 :input_product_path,:input_series_path,:output_dir,:status,:created_at,:updated_at)""",
+                 :input_product_path,:input_series_path,:output_dir,:postprocess_json,
+                 :status,:created_at,:updated_at)""",
                 project,
             )
 
@@ -67,12 +72,20 @@ class Repository:
 
     def list_projects(self) -> list[dict[str, Any]]:
         with self.db.connection() as conn:
-            return [dict(r) for r in conn.execute("SELECT * FROM projects WHERE deleted_at IS NULL ORDER BY created_at DESC")]
+            result = []
+            for row in conn.execute("SELECT * FROM projects WHERE deleted_at IS NULL ORDER BY created_at DESC"):
+                item = dict(row)
+                item["postprocess"] = _loads(item.pop("postprocess_json", "{}"), {})
+                result.append(item)
+            return result
 
     def get_project(self, project_id: str) -> dict[str, Any] | None:
         with self.db.connection() as conn:
             row = conn.execute("SELECT * FROM projects WHERE id=? AND deleted_at IS NULL", (project_id,)).fetchone()
-            return self.db.one(row)
+            project = self.db.one(row)
+            if project:
+                project["postprocess"] = _loads(project.pop("postprocess_json", "{}"), {})
+            return project
 
     def get_tasks(self, project_id: str) -> list[dict[str, Any]]:
         with self.db.connection() as conn:
@@ -108,6 +121,8 @@ class Repository:
     def update_project(self, project_id: str, **fields: Any) -> None:
         if not fields:
             return
+        if "postprocess" in fields:
+            fields["postprocess_json"] = json.dumps(fields.pop("postprocess"), ensure_ascii=False)
         fields["updated_at"] = now_iso()
         columns = ", ".join(f"{key} = :{key}" for key in fields)
         fields["project_id"] = project_id

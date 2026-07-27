@@ -57,6 +57,7 @@ def test_database_persists_project(tmp_path: Path):
     repo.create_project(row)
     assert repo.get_project("p1")["product_name"] == "demo"
     assert repo.get_project("p1")["size_template_id"] == "size-01"
+    assert repo.get_project("p1")["postprocess"] == {}
 
 
 def test_extra_reference_request_creates_independent_task(tmp_path: Path):
@@ -813,4 +814,148 @@ def test_agent_independent_run_requires_actual_image_for_each_referenced_image_r
             [{"filename": "layout.png", "content": make_mock_png("layout"), "content_type": "image/png"}],
             stt,
             None,
+        )
+
+
+def test_not_edible_watermark_is_generated_and_composited_without_overwriting_sources(tmp_path: Path):
+    from services.generation_service import GenerationService
+
+    settings = replace(
+        get_settings(tmp_path),
+        data_dir=tmp_path / "data",
+        output_root=tmp_path / "outputs",
+        db_path=tmp_path / "data" / "app.db",
+        prompt_api_key="",
+        mock_mode=True,
+    )
+    repo = Repository(Database(settings.db_path))
+    service = GenerationService(settings, repo, StorageService(settings.output_root))
+    project_id = service.create_project(
+        {
+            "product_name": "禁止食用测试",
+            "enabled_tasks": '["03","04","05","06"]',
+            "enable_not_edible_watermark": "1",
+        },
+        {"filename": "stt.png", "content": make_mock_png("stt"), "content_type": "image/png"},
+        None,
+        {},
+    )
+    service._run_initial(project_id)
+
+    project = repo.get_project(project_id)
+    project_dir = Path(project["output_dir"])
+    tasks = repo.get_tasks(project_id)
+    task_by_slot = {task["slot_id"]: task for task in tasks}
+    assert set(task_by_slot) == {"03", "04", "05", "06", "WM-01"}
+    watermark_usage = json.loads(task_by_slot["WM-01"]["versions"][0]["api_usage_json"])
+    assert [item["label"] for item in watermark_usage["reference_inputs"]] == [
+        "禁止食用水印底稿",
+        "手托比例参考图",
+    ]
+    config = project["postprocess"]["not_edible"]
+    assert config["status"] == "ready"
+    assert set(config["outputs"]) == {"03", "04", "05", "06"}
+    transparent = service.storage.resolve_relative(project_dir, config["transparent_asset_path"])
+    assert transparent.is_file() and transparent.suffix == ".png"
+    for slot_id in ("03", "04", "05", "06"):
+        source_version = task_by_slot[slot_id]["versions"][0]
+        source = service.storage.resolve_relative(project_dir, source_version["file_path"])
+        derivative = service.storage.resolve_relative(
+            project_dir,
+            config["outputs"][slot_id]["file_path"],
+        )
+        assert source.is_file() and derivative.is_file()
+        assert derivative != source
+        assert service.final_relative_path(project, task_by_slot[slot_id], source_version) == config["outputs"][slot_id]["file_path"]
+
+
+def test_scene_collage_builds_photoshop_asset_package_from_agents_and_four_scenes(tmp_path: Path):
+    from services.generation_service import GenerationService
+
+    settings = replace(
+        get_settings(tmp_path),
+        data_dir=tmp_path / "data",
+        output_root=tmp_path / "outputs",
+        db_path=tmp_path / "data" / "app.db",
+        prompt_api_key="",
+        mock_mode=True,
+    )
+    agents = AgentStore(settings.data_dir)
+    template_agent = agents.save_agent(
+        {
+            "name": "场景拼图模板 Agent",
+            "prompt": "制作一张四格电商场景拼图模板，保留清晰相框槽位，外观参考{{stt}}。",
+            "image_size": "1024x1024",
+            "image_quality": "medium",
+        }
+    )
+    text_agent = agents.save_agent(
+        {
+            "name": "艺术文字 Agent",
+            "prompt": "制作与当前产品风格匹配的英文艺术文字贴图，产品参考{{stt}}。",
+            "image_size": "1024x1024",
+            "image_quality": "medium",
+        }
+    )
+    repo = Repository(Database(settings.db_path))
+    service = GenerationService(settings, repo, StorageService(settings.output_root))
+    project_id = service.create_project(
+        {
+            "product_name": "场景拼图测试",
+            "enabled_tasks": '["07","08","09","10"]',
+            "enable_scene_collage": "1",
+            "collage_template_agent_id": template_agent["id"],
+            "collage_text_agent_id": text_agent["id"],
+        },
+        {"filename": "stt.png", "content": make_mock_png("stt"), "content_type": "image/png"},
+        None,
+        {},
+    )
+    service._run_initial(project_id)
+
+    project = repo.get_project(project_id)
+    tasks = {task["slot_id"]: task for task in repo.get_tasks(project_id)}
+    assert {"07", "08", "09", "10", "COL-TEMPLATE", "COL-TEXT"} == set(tasks)
+    assert tasks["COL-TEMPLATE"]["task_kind"] == "collage_template"
+    assert tasks["COL-TEXT"]["task_kind"] == "collage_text"
+    collage = project["postprocess"]["collage"]
+    assert collage["status"] == "ready"
+    assert collage["scene_count"] == 4
+    package = service.storage.resolve_relative(Path(project["output_dir"]), collage["package_path"])
+    assert package.is_file()
+    with zipfile.ZipFile(package) as archive:
+        names = archive.namelist()
+    assert any("场景拼图模板_原图" in name for name in names)
+    assert any("艺术文字_透明可替换.png" in name for name in names)
+    assert len([name for name in names if "/02_场景图素材/" in name]) == 4
+
+
+def test_scene_collage_requires_at_least_four_selected_scene_tasks(tmp_path: Path):
+    from services.generation_service import GenerationService
+
+    settings = replace(
+        get_settings(tmp_path),
+        data_dir=tmp_path / "data",
+        output_root=tmp_path / "outputs",
+        db_path=tmp_path / "data" / "app.db",
+        prompt_api_key="",
+        mock_mode=True,
+    )
+    service = GenerationService(
+        settings,
+        Repository(Database(settings.db_path)),
+        StorageService(settings.output_root),
+    )
+    with pytest.raises(ValueError, match="至少需要勾选 4 张"):
+        service.create_project(
+            {
+                "product_name": "不足四张",
+                "enabled_tasks": '["07","08","09"]',
+                "enable_scene_collage": "1",
+                "collage_template_agent_id": "agent-a",
+                "collage_text_agent_id": "agent-b",
+            },
+            {"filename": "stt.png", "content": make_mock_png("stt"), "content_type": "image/png"},
+            None,
+            {},
         )
