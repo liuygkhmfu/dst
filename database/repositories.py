@@ -39,13 +39,20 @@ class Repository:
             )
 
     def create_task(self, task: dict[str, Any]) -> None:
+        task = dict(task)
+        task.setdefault("generation_size", "")
+        task.setdefault("generation_quality", "")
+        task.setdefault("agent_id", "")
+        task.setdefault("agent_inputs_json", "{}")
         with self.db.connection() as conn:
             conn.execute(
                 """INSERT INTO image_tasks
                 (id,project_id,slot_id,task_name,task_kind,prompt_group,original_prompt,current_prompt,
-                 reference_fields_json,status,selected_version_id,last_error,created_at,updated_at)
+                 reference_fields_json,generation_size,generation_quality,agent_id,agent_inputs_json,
+                 status,selected_version_id,last_error,created_at,updated_at)
                 VALUES (:id,:project_id,:slot_id,:task_name,:task_kind,:prompt_group,:original_prompt,:current_prompt,
-                 :reference_fields_json,:status,:selected_version_id,:last_error,:created_at,:updated_at)""",
+                 :reference_fields_json,:generation_size,:generation_quality,:agent_id,:agent_inputs_json,
+                 :status,:selected_version_id,:last_error,:created_at,:updated_at)""",
                 task,
             )
 
@@ -72,6 +79,7 @@ class Repository:
             tasks = [dict(r) for r in conn.execute("SELECT * FROM image_tasks WHERE project_id=? ORDER BY slot_id", (project_id,))]
             for task in tasks:
                 task["reference_fields"] = _loads(task.pop("reference_fields_json", "[]"), [])
+                task["agent_inputs"] = _loads(task.pop("agent_inputs_json", "{}"), {})
                 task["versions"] = [dict(v) for v in conn.execute("SELECT * FROM image_versions WHERE task_id=? ORDER BY version_number", (task["id"],))]
                 for version in task["versions"]:
                     version["is_approved"] = bool(version["is_approved"])
@@ -93,6 +101,7 @@ class Repository:
                 return None
             task = dict(row)
             task["reference_fields"] = _loads(task.pop("reference_fields_json", "[]"), [])
+            task["agent_inputs"] = _loads(task.pop("agent_inputs_json", "{}"), {})
             task["versions"] = [dict(v) for v in conn.execute("SELECT * FROM image_versions WHERE task_id=? ORDER BY version_number", (task_id,))]
             return task
 

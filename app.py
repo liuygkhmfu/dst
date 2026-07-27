@@ -17,6 +17,7 @@ from config.settings import IMAGE_QUALITY_OPTIONS, get_settings
 from config.task_definitions import TASK_DEFINITIONS
 from database.db import Database
 from database.repositories import Repository
+from services.agent_service import AGENT_IMAGE_QUALITIES, AGENT_IMAGE_SIZES, AGENT_PROJECT_VARIABLES, AgentStore
 from services.generation_service import GenerationService
 from services.prompt_service import PROMPT_VARIABLES
 from services.storage_service import StorageService, read_image_info
@@ -28,6 +29,7 @@ DB = Database(SETTINGS.db_path)
 REPO = Repository(DB)
 STORAGE = StorageService(SETTINGS.output_root)
 GENERATOR = GenerationService(SETTINGS, REPO, STORAGE)
+AGENTS = AgentStore(SETTINGS.data_dir)
 
 EDITABLE_ENV_KEYS = {
     "IMAGE_API_BASE_URL", "IMAGE_API_KEY", "IMAGE_MODEL", "IMAGE_SIZE", "IMAGE_QUALITY", "IMAGE_OUTPUT_FORMAT", "IMAGE_BACKGROUND", "IMAGE_MODERATION",
@@ -247,6 +249,36 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/settings":
                 self.send_json(settings_payload())
                 return
+            if path == "/api/agents":
+                self.send_json({
+                    "agents": AGENTS.list_agents(),
+                    "image_size_options": list(AGENT_IMAGE_SIZES),
+                    "image_quality_options": list(AGENT_IMAGE_QUALITIES),
+                    "project_variable_options": list(AGENT_PROJECT_VARIABLES),
+                })
+                return
+            if path == "/api/agent-run-files":
+                query = parse_qs(parsed.query)
+                agent_id = query.get("agent", [""])[0]
+                relative = unquote(query.get("path", [""])[0])
+                file_path = AGENTS.resolve_run_file(agent_id, relative)
+                self.send_data(
+                    file_path.read_bytes(),
+                    mimetypes.guess_type(file_path.name)[0] or "application/octet-stream",
+                    headers={"Content-Disposition": content_disposition("inline", file_path.name)},
+                )
+                return
+            if path == "/api/agent-reference-files":
+                query = parse_qs(parsed.query)
+                agent_id = query.get("agent", [""])[0]
+                relative = unquote(query.get("path", [""])[0])
+                file_path = AGENTS.resolve_reference_file(agent_id, relative)
+                self.send_data(
+                    file_path.read_bytes(),
+                    mimetypes.guess_type(file_path.name)[0] or "application/octet-stream",
+                    headers={"Content-Disposition": content_disposition("inline", file_path.name)},
+                )
+                return
             if path.startswith("/api/projects/"):
                 project_id = path.rsplit("/", 1)[-1]
                 self.send_json(project_payload(project_id))
@@ -308,20 +340,63 @@ class Handler(BaseHTTPRequestHandler):
                 form = {key: values[-1] for key, values in fields.items()}
                 product = (files.get("product_image") or [None])[0]
                 series = (files.get("series_image") or [None])[0]
-                for item in [product, series, *[f for key, vals in files.items() if key.startswith("extra_") for f in vals]]:
+                request_uploads = {
+                    key: values
+                    for key, values in files.items()
+                    if key.startswith("extra_") or key.startswith("agent_ref_")
+                }
+                for item in [product, series, *[f for vals in request_uploads.values() for f in vals]]:
                     if item and item.get("content"):
                         read_image_info(item["content"])
                         if len(item["content"]) > SETTINGS.max_upload_mb * 1024 * 1024:
                             raise ValueError(f"{item.get('filename', '图片')} 超过 {SETTINGS.max_upload_mb}MB")
-                extra_uploads = {key: values for key, values in files.items() if key.startswith("extra_")}
-                project_id = GENERATOR.create_project(form, product, series, extra_uploads)
+                project_id = GENERATOR.create_project(form, product, series, request_uploads)
                 GENERATOR.start_initial_generation(project_id)
                 self.send_json({"id": project_id})
                 return
             if path == "/api/settings":
                 self.send_json(apply_settings(self.read_json()))
                 return
+            if path == "/api/agents":
+                fields, files = parse_multipart(self.headers.get("Content-Type", ""), self.read_body())
+                form = {key: values[-1] for key, values in fields.items()}
+                fixed_references = files.get("fixed_reference_images", [])
+                for upload in fixed_references:
+                    if upload.get("content"):
+                        read_image_info(upload["content"])
+                        if len(upload["content"]) > SETTINGS.max_upload_mb * 1024 * 1024:
+                            raise ValueError(f"{upload.get('filename', 'Agent固定参考图')} 超过 {SETTINGS.max_upload_mb}MB")
+                saved = AGENTS.save_agent(form, fixed_references)
+                self.send_json({"ok": True, "agent": saved})
+                return
             parts = path.strip("/").split("/")
+            if len(parts) == 4 and parts[:2] == ["api", "agents"] and parts[3] == "run":
+                agent_id = parts[2]
+                fields, files = parse_multipart(self.headers.get("Content-Type", ""), self.read_body())
+                form = {key: values[-1] for key, values in fields.items()}
+                stt_upload = (files.get("product_image") or [None])[0]
+                cpt_upload = (files.get("series_image") or [None])[0]
+                agent_uploads = files.get("reference_images", [])
+                for upload in [stt_upload, cpt_upload, *agent_uploads]:
+                    if not upload:
+                        continue
+                    if upload.get("content"):
+                        read_image_info(upload["content"])
+                        if len(upload["content"]) > SETTINGS.max_upload_mb * 1024 * 1024:
+                            raise ValueError(f"{upload.get('filename', '参考图')} 超过 {SETTINGS.max_upload_mb}MB")
+                try:
+                    input_values = json.loads(form.get("inputs") or "{}")
+                except (TypeError, ValueError, json.JSONDecodeError) as exc:
+                    raise ValueError("Agent 运行参数格式错误") from exc
+                result = GENERATOR.run_agent(
+                    agent_id,
+                    input_values,
+                    agent_uploads,
+                    stt_upload,
+                    cpt_upload,
+                )
+                self.send_json({"ok": True, "run": result})
+                return
             if len(parts) == 4 and parts[0] == "api" and parts[1] == "projects":
                 project_id, action = parts[2], parts[3]
                 if action == "refresh-prompts":
@@ -368,6 +443,11 @@ class Handler(BaseHTTPRequestHandler):
     def do_DELETE(self) -> None:
         try:
             path = urlparse(self.path).path
+            if path.startswith("/api/agents/"):
+                agent_id = path.rsplit("/", 1)[-1]
+                AGENTS.delete(agent_id)
+                self.send_json({"ok": True})
+                return
             if path.startswith("/api/projects/"):
                 project_id = path.rsplit("/", 1)[-1]
                 if not REPO.get_project(project_id):

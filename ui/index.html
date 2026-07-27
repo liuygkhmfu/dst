@@ -67,6 +67,9 @@
     .variable-chips { display:flex; flex-wrap:wrap; gap:8px; }
     .variable-chip { padding:7px 9px; border-radius:8px; background:#fff; border:1px solid var(--line); font-size:11px; color:#52625e; }
     .variable-chip code { color:var(--accent); font-weight:800; }
+    button.variable-chip.active { background:#e5f3ef; border-color:#69a999; color:#1b6656; }
+    .variable-toggle { display:inline-block; margin-left:5px; font-weight:800; color:#7f918c; }
+    button.variable-chip.active .variable-toggle { color:#b64040; }
     .task-options { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; }
     .task-option { padding:11px; background:var(--soft); border:1px solid var(--line); border-radius:10px; display:flex; gap:9px; align-items:flex-start; font-size:12px; font-weight:600; }
     .task-option input { accent-color:var(--accent); margin-top:2px; }
@@ -89,6 +92,7 @@
      .task-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
     .task-card { background:#fff; border:1px solid var(--line); border-radius:16px; overflow:hidden; box-shadow:0 7px 22px rgba(22,38,50,.045); }
     .task-card.extra { border-color:#c8e4dc; }
+    .task-card.agent { border-color:#b9d8ef; }
     .card-top { display:flex; justify-content:space-between; gap:10px; padding:15px 16px 12px; }
     .task-id { color:var(--accent); font-weight:800; margin-right:5px; }
     .status { border-radius:99px; padding:4px 8px; font-size:10px; font-weight:800; white-space:nowrap; background:#edf2f1; color:#5b6d68; }
@@ -118,7 +122,37 @@
     .progress-line { height:6px; border-radius:6px; overflow:hidden; background:#e8eeec; margin:15px 0 5px; }
     .progress-line i { display:block; height:100%; background:var(--accent); border-radius:6px; transition:width .25s; }
     .notice { border-left:3px solid var(--orange); background:#fff9f1; color:#7e5a38; padding:11px 13px; border-radius:7px; font-size:12px; line-height:1.6; }
+    .agent-layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(360px,.9fr); gap:18px; align-items:start; }
+    .agent-list { display:grid; gap:12px; }
+    .agent-card { border:1px solid #dce6ed; border-radius:14px; padding:16px; background:#fbfdff; }
+    .agent-card-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+    .agent-card-actions { display:flex; gap:7px; }
+    .agent-meta { display:flex; gap:7px; flex-wrap:wrap; margin:10px 0; }
+    .agent-tag { padding:5px 8px; border-radius:99px; background:#eaf4fb; color:#35647d; font-size:10px; font-weight:800; }
+    .agent-prompt-preview { color:#52616b; font-size:12px; line-height:1.65; white-space:pre-wrap; max-height:96px; overflow:hidden; }
+    .agent-refs { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+    .agent-ref { width:66px; }
+    .agent-ref img { width:66px; height:66px; object-fit:cover; display:block; border-radius:9px; border:1px solid var(--line); background:#eef2f1; }
+    .agent-ref span { display:block; margin-top:4px; color:var(--muted); font-size:9px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .agent-editor { position:sticky; top:18px; }
+    .agent-editor textarea { min-height:240px; }
+    .agent-existing-refs { display:flex; flex-wrap:wrap; gap:9px; }
+    .agent-keep-ref { width:82px; padding:7px; border:1px solid var(--line); border-radius:10px; background:#fff; font-size:10px; }
+    .agent-keep-ref img { width:66px; height:66px; object-fit:cover; border-radius:7px; display:block; margin-bottom:5px; }
+    .agent-keep-ref label { display:flex; gap:4px; align-items:center; font-size:10px; }
+    .agent-parameter-list { display:grid; gap:10px; }
+    .agent-parameter-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:10px; border:1px solid var(--line); border-radius:10px; background:#fbfcfc; align-items:end; }
+    .agent-parameter-options { display:flex; gap:12px; align-items:center; min-height:42px; font-size:11px; }
+    .agent-runtime-fields { display:grid; gap:10px; padding:12px; border:1px dashed #bdd8cd; border-radius:12px; background:#f7fbf9; }
+    .agent-runtime-text-fields { display:grid; gap:10px; }
+    .agent-run-layout { display:grid; grid-template-columns:minmax(350px,.8fr) minmax(0,1.2fr); gap:18px; align-items:start; }
+    #agent-run-form textarea[name=prompt] { min-height:240px; }
+    .agent-run-result img { width:100%; max-height:680px; object-fit:contain; border-radius:14px; background:#edf1ef; }
+    .agent-run-result textarea { min-height:180px; }
+    .agent-request-config { margin-top:10px; padding:12px; border:1px dashed #b9d8ef; border-radius:12px; background:#f8fcff; }
+    .agent-request-config .field { margin-top:9px; }
     @media (max-width:1000px) { .app{grid-template-columns:1fr;} .sidebar{min-height:auto; padding:16px;}.project-list{flex-direction:row;}.project-item{min-width:190px;} .task-options{grid-template-columns:repeat(2,1fr);} }
+    @media (max-width:900px) { .agent-layout,.agent-run-layout{grid-template-columns:1fr;} .agent-editor{position:static;} .agent-parameter-row{grid-template-columns:1fr;} }
     @media (max-width:700px) { .main{padding:20px 14px 40px;} .form-grid,.task-grid{grid-template-columns:1fr;} .stats{grid-template-columns:repeat(2,1fr);} .task-options{grid-template-columns:1fr;} .topbar,.workspace-head{display:block;} .head-actions{justify-content:flex-start; margin-top:16px;} }
   </style>
 </head>
@@ -126,7 +160,7 @@
   <div class="app">
     <aside class="sidebar">
       <div class="brand"><b>电商图 AI 工作台</b><span>本地生成 · 审核 · 版本管理</span></div>
-      <div class="side-title"><span>我的项目</span><div style="display:flex;gap:6px"><button class="btn btn-ghost" id="side-settings">设置</button><button class="btn btn-ghost" id="side-new">+ 新建</button></div></div>
+      <div class="side-title"><span>我的项目</span><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-ghost" id="side-agents">Agents</button><button class="btn btn-ghost" id="side-settings">设置</button><button class="btn btn-ghost" id="side-new">+ 新建</button></div></div>
       <div class="project-list" id="project-list"></div>
     </aside>
     <main class="main">
@@ -136,7 +170,7 @@
   </div>
   <div class="toast" id="toast"></div>
   <script>
-    const state = { projects: [], project: null, viewVersions: {}, promptDrafts: {}, editDrafts: {}, functionTemplates: [], poll: null };
+    const state = { projects: [], project: null, viewVersions: {}, promptDrafts: {}, editDrafts: {}, functionTemplates: [], agents: [], agentSizeOptions: [], agentQualityOptions: [], agentProjectVariables: [], agentRunResults: {}, poll: null };
     const $ = (s, root=document) => root.querySelector(s);
     const $$ = (s, root=document) => [...root.querySelectorAll(s)];
     const esc = (v='') => String(v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -144,6 +178,8 @@
     const toast = (msg) => { const el=$('#toast'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); };
     const api = async (url, options={}) => { const res=await fetch(url, options); const data=await res.json().catch(()=>({})); if(!res.ok) throw new Error(data.error || `请求失败（${res.status}）`); return data; };
     const fileUrl = (projectId, path) => `/api/files?project=${encodeURIComponent(projectId)}&path=${encodeURIComponent(path)}`;
+    const agentRunFileUrl = (agentId, path) => `/api/agent-run-files?agent=${encodeURIComponent(agentId)}&path=${encodeURIComponent(path)}`;
+    const agentReferenceFileUrl = (agentId, path) => `/api/agent-reference-files?agent=${encodeURIComponent(agentId)}&path=${encodeURIComponent(path)}`;
 
     function renderPromptVariables(s) {
       return `<div class="variable-guide"><p><b>可用工作流占位词</b> · 模板中保留双花括号，生成描述词时后端按当前项目替换实际值；图片变量会继续映射到实际上传顺序。</p><div class="variable-chips">${(s.prompt_variables||[]).map(v=>`<span class="variable-chip"><code>{{${esc(v.name)}}}</code> · ${esc(v.kind)} · ${esc(v.source)}</span>`).join('')}</div></div>`;
@@ -177,23 +213,61 @@
       return state.functionTemplates.map((t,i)=>`<option value="${esc(t.id)}" ${(selected?selected===t.id:i===0)?'selected':''}>${esc(t.name)}</option>`).join('');
     }
 
+    function functionSourceOptions(selected='') {
+      const templates=state.functionTemplates.map(t=>`<option value="template:${esc(t.id)}" ${selected===`template:${t.id}`?'selected':''}>功能图模板 · ${esc(t.name)}</option>`);
+      const agents=state.agents.map(a=>`<option value="agent:${esc(a.id)}" ${selected===`agent:${a.id}`?'selected':''}>Agent · ${esc(a.name)} · ${esc(a.image_size)} / ${esc(a.image_quality)}</option>`);
+      return [...templates,...agents].join('');
+    }
+
+    function agentProjectVariableDetails(agent) {
+      const used=new Set(agent?.project_variables||[]);
+      return state.agentProjectVariables.filter(item=>used.has(item.name));
+    }
+
+    function renderAgentRequestConfig(agent) {
+      if(!agent) return '';
+      const variables=agentProjectVariableDetails(agent);
+      const chips=variables.map(item=>`<span class="variable-chip"><code>{{${esc(item.name)}}}</code> · ${esc(item.source)}</span>`).join('');
+      const needsTaskRefs=(agent.project_variables||[]).includes('Agent参考图');
+      const fixedReferenceCount=(agent.reference_paths||[]).length;
+      const requiresTaskUpload=needsTaskRefs&&!fixedReferenceCount;
+      const needsCpt=(agent.project_variables||[]).some(name=>name==='cpt'||name==='系列外观参考图');
+      return `<div class="agent-request-config" data-agent-config="${esc(agent.id)}"><div class="notice"><b>自动绑定本页真实输入</b> · 文字变量读取上方表单；stt/cpt 分别绑定上方上传的真实文件。${fixedReferenceCount?`此 Agent 还会自动携带 ${fixedReferenceCount} 张固定任务参考图。`:''}${needsCpt?'<br><b>此 Agent 直接引用 cpt：</b>请把产品类型选为“系列品”，并在上方上传 cpt 系列外观参考图。':''}</div>${chips?`<div class="variable-chips" style="margin-top:10px">${chips}</div>`:'<p class="hint" style="margin-top:10px">此 Agent 描述词尚未引用新建项目变量。</p>'}<div class="field"><label>本次临时追加参考图 <span class="hint">${requiresTaskUpload?'描述词使用了 {{Agent参考图}} 且没有固定参考图，至少上传1张':fixedReferenceCount?'可选；会与 Agent 固定参考图一起参与当前任务':'可选；用于补充当前任务的构图、风格或动作'}</span></label><input class="agent-request-files" type="file" accept=".jpg,.jpeg,.png,.webp" multiple ${requiresTaskUpload?'required':''}></div></div>`;
+    }
+
+    function updateFunctionRequestRow(row) {
+      const [sourceType,sourceId]=($('.function-source-select',row)?.value||'').split(':',2);
+      let holder=$('.function-dynamic',row);
+      if(!holder) return;
+      const agent=sourceType==='agent'?state.agents.find(item=>item.id===sourceId):null;
+      holder.innerHTML=renderAgentRequestConfig(agent);
+      const nameInput=$('.function-task-name',row);
+      if(nameInput && !nameInput.value) {
+        const template=sourceType==='template'?state.functionTemplates.find(item=>item.id===sourceId):agent;
+        nameInput.placeholder=template?.name||'功能图';
+      }
+    }
+
     function addFunctionRequest() {
       const list=$('#function-request-list');
-      if(!list || !state.functionTemplates.length) return toast('请先在设置中新增并保存功能图模板');
+      if(!list || (!state.functionTemplates.length&&!state.agents.length)) return toast('请先保存功能图模板或创建 Agent');
       const index=list.children.length;
       const row=document.createElement('div');
       row.className='extra-row function-request-row';
-      row.innerHTML=`<div class="extra-num">${index+1}</div><div class="extra-fields"><div class="field"><label>选择功能图模板</label><select class="function-template-select">${functionTemplateOptions()}</select></div><div class="field"><label>本张图片名称 <span class="hint">留空则使用模板名称</span></label><input class="function-task-name" type="text" placeholder="${esc(state.functionTemplates[0]?.name||'功能图')}"></div></div><button type="button" class="remove-extra" data-action="remove-function" title="删除">×</button>`;
+      row.innerHTML=`<div class="extra-num">${index+1}</div><div class="extra-fields"><div class="field"><label>选择功能图模板或 Agent</label><select class="function-source-select">${functionSourceOptions()}</select></div><div class="field"><label>本张图片名称 <span class="hint">留空则使用模板或 Agent 名称</span></label><input class="function-task-name" type="text" placeholder="功能图"></div><div class="function-dynamic"></div></div><button type="button" class="remove-extra" data-action="remove-function" title="删除">×</button>`;
       list.appendChild(row);
+      updateFunctionRequestRow(row);
     }
 
     async function ensureNewProjectEnhancements() {
       const form=$('#project-form');
       if(!form || $('#function-request-list',form)) return;
-      if(!state.functionTemplates.length) {
-        const settings=await api('/api/settings');
-        state.functionTemplates=settings.function_templates||settings.size_templates||[];
-      }
+      const [settings,agentPayload]=await Promise.all([api('/api/settings'),api('/api/agents')]);
+      state.functionTemplates=settings.function_templates||settings.size_templates||[];
+      state.agents=agentPayload.agents||[];
+      state.agentSizeOptions=agentPayload.image_size_options||[];
+      state.agentQualityOptions=agentPayload.image_quality_options||[];
+      state.agentProjectVariables=agentPayload.project_variable_options||[];
       const templateSelect=$('[name="size_template_id"]',form);
       if(templateSelect) {
         templateSelect.innerHTML=functionTemplateOptions(templateSelect.value);
@@ -210,7 +284,7 @@
       if(!extraSection) return;
       const section=document.createElement('div');
       section.className='section';
-      section.innerHTML=`<div class="section-head"><div><h2>追加功能图</h2><p>除图13外，可从设置中保存的功能图模板继续追加图片；每一行都是独立任务并由 GPT-5.5 单独重写描述词。</p></div><button type="button" class="btn btn-ghost" data-action="add-function">+ 追加一张功能图</button></div><div class="notice">追加任务默认使用产品的 stt/cpt 参考规则，不会与摆放图、场景图或其他功能图模板拼接。</div><div class="extra-list" id="function-request-list" style="margin-top:12px"></div>`;
+      section.innerHTML=`<div class="section-head"><div><h2>追加功能图与 Agent</h2><p>除图13外，可继续追加普通功能图模板或自定义 Agent；每一行都是独立任务并由 GPT-5.5 单独重写描述词。</p></div><button type="button" class="btn btn-ghost" data-action="add-function">+ 追加一张功能图</button></div><div class="notice">Agent 使用自己的图片比例和清晰度，并自动读取本页上方的新建项目变量。stt/cpt 图片变量直接绑定本页顶部上传的真实图片；只有描述词引用 {{Agent参考图}} 时，才需要为该任务额外上传一张或多张专用参考图。</div><div class="extra-list" id="function-request-list" style="margin-top:12px"></div>`;
       extraSection.before(section);
     }
 
@@ -257,23 +331,200 @@
       }
     }
 
+    function agentOptionLabel(options,value) {
+      return options.find(option=>option.value===value)?.label||value;
+    }
+
+    function renderAgentCard(agent) {
+      const refs=(agent.reference_paths||[]);
+      return `<article class="agent-card"><div class="agent-card-head"><div><h3>${esc(agent.name)}</h3><div class="agent-meta"><span class="agent-tag">${esc(agentOptionLabel(state.agentSizeOptions,agent.image_size))}</span><span class="agent-tag">清晰度：${esc(agentOptionLabel(state.agentQualityOptions,agent.image_quality))}</span><span class="agent-tag">引用 ${(agent.project_variables||[]).length} 个项目变量</span><span class="agent-tag">固定参考图 ${refs.length} 张</span></div></div><div class="agent-card-actions"><button type="button" class="btn btn-primary" data-action="run-agent" data-agent-id="${esc(agent.id)}">打开 Agent 工作台</button><button type="button" class="btn btn-danger" data-action="delete-agent" data-agent-id="${esc(agent.id)}">删除</button></div></div><div class="agent-prompt-preview">${esc(agent.prompt)}</div>${refs.length?`<div class="agent-refs">${refs.map((path,index)=>`<div class="agent-ref"><img src="${agentReferenceFileUrl(agent.id,path)}" alt="固定参考图${index+1}"><span>固定图${index+1}</span></div>`).join('')}</div>`:''}</article>`;
+    }
+
+    function agentVariablePattern(name) {
+      const escaped=String(name||'').replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      return new RegExp(`\\{\\{\\s*${escaped}\\s*\\}\\}`,'g');
+    }
+
+    function agentPromptHasVariable(prompt,name) {
+      return agentVariablePattern(name).test(String(prompt||''));
+    }
+
+    function syncAgentVariableButtons(form) {
+      const prompt=$('textarea[name="prompt"]',form)?.value||'';
+      $$('[data-action="insert-agent-variable"]',form).forEach(button=>{
+        const active=agentPromptHasVariable(prompt,button.dataset.variable);
+        button.classList.toggle('active',active);
+        const label=$('.variable-toggle',button);
+        if(label) label.textContent=active?'× 删除':'＋ 添加';
+      });
+      syncAgentWorkspaceBindings(form);
+    }
+
+    function renderAgentVariablePalette(prompt='') {
+      return `<div class="variable-guide"><p><b>与“新建生成项目”完全一致的可用变量</b> · 点击变量会插入到上方 Agent 描述词光标位置；已添加的变量会高亮，再点一次即可删除。文字变量读取项目表单；stt/cpt 等图片变量除插入占位符外，运行时还会绑定对应的真实上传文件。</p><div class="variable-chips">${state.agentProjectVariables.map(item=>{const active=agentPromptHasVariable(prompt,item.name);return `<button type="button" class="variable-chip ${active?'active':''}" data-action="insert-agent-variable" data-variable="${esc(item.name)}"><code>{{${esc(item.name)}}}</code> · ${item.kind==='image'?'<b>图片上传：</b> ':''}${esc(item.source)}<span class="variable-toggle">${active?'× 删除':'＋ 添加'}</span></button>`;}).join('')}</div></div>`;
+    }
+
+    function renderAgentFixedReferences(agent) {
+      const refs=agent?.reference_paths||[];
+      return `<div class="field full"><label>固定 Agent 任务参考图 <span class="hint">最多8张；选择新图片并保存后，将整体替换当前固定图</span></label>${refs.length?`<div class="agent-existing-refs">${refs.map((path,index)=>`<div class="agent-keep-ref"><img src="${agentReferenceFileUrl(agent.id,path)}" alt="固定参考图${index+1}"><span>固定图${index+1}</span></div>`).join('')}</div>`:'<p class="hint fixed-reference-status">当前没有固定参考图。</p>'}<input class="agent-fixed-reference-input" type="file" accept=".jpg,.jpeg,.png,.webp" multiple><input name="clear_fixed_references" type="hidden" value="0"><div style="display:flex;gap:8px;margin-top:8px"><button type="button" class="btn btn-light" data-action="clear-agent-fixed-refs" ${refs.length?'':'disabled'}>清空固定参考图</button><span class="hint fixed-reference-change-hint">${refs.length?'未选择新图时，保存会继续保留当前固定图。':'上传后保存，即可与 Agent 固定绑定。'}</span></div></div>`;
+    }
+
+    function renderAgentDefinitionFields(agent) {
+      return `<div class="section"><div class="section-head"><div><div class="eyebrow">${agent?.id?'EDIT & TEST':'NEW AGENT'}</div><h2>Agent 定义与描述词</h2><p>定义编辑、变量增删、固定参考图和独立测试集中在同一个工作台。</p></div></div><div class="form-grid"><div class="field full"><label>Agent 名称</label><input type="text" name="name" required value="${esc(agent?.name||'')}" placeholder="例如：白底卖点图 Agent"></div><div class="field"><label>图片比例</label><select name="image_size">${state.agentSizeOptions.map(option=>`<option value="${esc(option.value)}" ${(agent?.image_size||'1024x1024')===option.value?'selected':''}>${esc(option.label)}</option>`).join('')}</select></div><div class="field"><label>图片清晰度</label><select name="image_quality">${state.agentQualityOptions.map(option=>`<option value="${esc(option.value)}" ${(agent?.image_quality||'medium')===option.value?'selected':''}>${esc(option.label)}</option>`).join('')}</select></div><div class="field full"><label>Agent 功能与完整描述词要求 <span class="hint">可实时编辑；运行时先保存当前版本，再按此描述词出图</span></label><textarea name="prompt" required placeholder="写明这张图要解决什么问题，并插入需要读取的新建项目变量">${esc(agent?.prompt||'')}</textarea></div><div class="field full">${renderAgentVariablePalette(agent?.prompt||'')}</div>${renderAgentFixedReferences(agent)}<div class="field full"><div class="notice"><b>追加套图时：</b>stt/cpt 使用新建项目顶部上传的真实图片；固定 Agent 任务参考图自动随 Agent 参与出图，本次临时参考图仅作为补充。</div></div></div></div>`;
+    }
+
+    async function showAgents() {
+      state.project=null;
+      clearInterval(state.poll);
+      renderSidebar();
+      const payload=await api('/api/agents');
+      state.agents=payload.agents||[];
+      state.agentSizeOptions=payload.image_size_options||[];
+      state.agentQualityOptions=payload.image_quality_options||[];
+      state.agentProjectVariables=payload.project_variable_options||[];
+      $('#page-title').textContent='图片 Agents';
+      $('#page-subtitle').textContent='点击进入 Agent 工作台后，再编辑定义、管理变量、绑定固定参考图并独立测试。';
+      $('#view').innerHTML=`<section class="panel"><div class="section-head"><div><div class="eyebrow">AGENT LIBRARY</div><h2>我的图片 Agents</h2><p>列表页只负责选择；所有编辑和测试操作都在 Agent 工作台中完成。</p></div><button type="button" class="btn btn-primary" data-action="new-agent">+ 新增 Agent</button></div>${state.agents.length?`<div class="agent-list">${state.agents.map(renderAgentCard).join('')}</div>`:'<div class="empty" style="min-height:280px"><div class="empty-inner"><div class="empty-mark">A</div><h2>还没有 Agent</h2><p style="margin-top:10px">新建后进入工作台，配置描述词、变量与固定参考图并测试。</p></div></div>'}</section>`;
+    }
+
+    function agentVariablesFromPrompt(prompt) {
+      return state.agentProjectVariables.filter(item=>agentPromptHasVariable(prompt,item.name)).map(item=>item.name);
+    }
+
+    function renderAgentRuntimeFields(agent, currentValues={}) {
+      const defaults={'产品名':'Agent独立测试产品','产品文字信息':'PU材质，慢回弹','产品描述':'PU材质，慢回弹','产品数量':'1','摆放展示要求':'产品完整、清晰、自然展示','自定义使用场景':'自然真实的日常使用场景','产品尺寸':''};
+      const variables=agentProjectVariableDetails(agent).filter(item=>item.kind!=='image'&&item.name!=='是否系列品');
+      const fields=variables.map(item=>{
+        const value=currentValues[item.name]??defaults[item.name]??'';
+        if(item.kind==='textarea') return `<div class="field"><label>${esc(item.label)} <span class="hint">{{${esc(item.name)}}}</span></label><textarea class="agent-run-input" data-variable="${esc(item.name)}">${esc(value)}</textarea></div>`;
+        return `<div class="field"><label>${esc(item.label)} <span class="hint">{{${esc(item.name)}}}</span></label><input class="agent-run-input" data-variable="${esc(item.name)}" type="${item.kind==='number'?'number':'text'}" value="${esc(value)}"></div>`;
+      }).join('');
+      const seriesValue=currentValues['是否系列品']||'否';
+      return `<div class="field"><label>测试产品类型 <span class="hint">决定 stt/cpt 的参考分工</span></label><select class="agent-run-input agent-run-product-type" data-variable="是否系列品"><option value="否" ${seriesValue!=='是'?'selected':''}>单品：stt 锁定外观与比例</option><option value="是" ${seriesValue==='是'?'selected':''}>系列品：cpt 锁定外观，stt 锁定比例</option></select></div>${fields||'<p class="hint">此 Agent 只使用图片变量，无需模拟填写其他文字项目字段。</p>'}`;
+    }
+
+    function collectAgentRuntimeValues(form) {
+      const values={};
+      $$('.agent-run-input',form).forEach(input=>values[input.dataset.variable]=input.value);
+      return values;
+    }
+
+    function syncAgentImageRequirements(form) {
+      if(!form||form.id!=='agent-run-form') return;
+      const prompt=$('textarea[name="prompt"]',form)?.value||'';
+      const variables=new Set(agentVariablesFromPrompt(prompt));
+      const directCpt=variables.has('cpt')||variables.has('系列外观参考图');
+      const series=$('.agent-run-product-type',form)?.value==='是';
+      const cptInput=$('.agent-run-series-image',form);
+      if(cptInput) {
+        cptInput.dataset.directRequired=directCpt?'1':'0';
+        cptInput.required=directCpt||series;
+      }
+      const cptHint=$('.agent-run-cpt-hint',form);
+      if(cptHint) cptHint.textContent=directCpt?'描述词直接引用 cpt，测试时必须上传':series?'系列品测试必填':'单品不使用；系列品测试必填';
+      const fixedCount=Number(form.dataset.fixedRefCount||0);
+      const clearFixed=$('[name="clear_fixed_references"]',form)?.value==='1';
+      const replacementCount=$('.agent-fixed-reference-input',form)?.files?.length||0;
+      const hasFixed=replacementCount>0||(!clearFixed&&fixedCount>0);
+      const taskInput=$('input[name="reference_images"]',form);
+      const requiresTaskRef=variables.has('Agent参考图')&&!hasFixed;
+      if(taskInput) taskInput.required=requiresTaskRef;
+      const taskHint=$('.agent-run-task-ref-hint',form);
+      if(taskHint) taskHint.textContent=requiresTaskRef?'描述词引用了 {{Agent参考图}} 且没有固定图，至少上传1张':hasFixed?'可选；会与固定参考图一起参与本次测试':'可选；本次测试临时补充，最多8张';
+    }
+
+    function syncAgentWorkspaceBindings(form) {
+      if(!form||form.id!=='agent-run-form') return;
+      const holder=$('.agent-runtime-text-fields',form);
+      if(!holder) return;
+      const currentValues=collectAgentRuntimeValues(form);
+      const prompt=$('textarea[name="prompt"]',form)?.value||'';
+      const agent={project_variables:agentVariablesFromPrompt(prompt)};
+      holder.innerHTML=renderAgentRuntimeFields(agent,currentValues);
+      syncAgentImageRequirements(form);
+    }
+
+    async function showAgentRunner(agentId='new') {
+      const payload=await api('/api/agents');
+      state.agents=payload.agents||[];
+      state.agentSizeOptions=payload.image_size_options||[];
+      state.agentQualityOptions=payload.image_quality_options||[];
+      state.agentProjectVariables=payload.project_variable_options||[];
+      const agent=agentId==='new'
+        ? {id:'',name:'',prompt:'',image_size:'1024x1024',image_quality:'medium',project_variables:[],reference_paths:[]}
+        : state.agents.find(item=>item.id===agentId);
+      if(!agent) return toast('Agent 不存在或已删除');
+      const result=agent.id?state.agentRunResults[agent.id]:null;
+      const needsTaskRefs=(agent.project_variables||[]).includes('Agent参考图');
+      const needsCpt=(agent.project_variables||[]).some(name=>name==='cpt'||name==='系列外观参考图');
+      const hasFixedReferences=(agent.reference_paths||[]).length>0;
+      state.project=null;
+      clearInterval(state.poll);
+      renderSidebar();
+      $('#page-title').textContent=agent.id?`Agent 工作台：${agent.name}`:'新建 Agent 工作台';
+      $('#page-subtitle').textContent='在同一页面编辑定义和变量、管理固定参考图，并用当前描述词立即测试或重新出图。';
+      $('#view').innerHTML=`<div class="agent-run-layout"><form class="panel" id="agent-run-form" data-agent-id="${esc(agent.id)}" data-fixed-ref-count="${(agent.reference_paths||[]).length}">${renderAgentDefinitionFields(agent)}<div class="section"><div class="section-head"><div><div class="eyebrow">INDEPENDENT TEST</div><h2>独立运行输入</h2><p>这些产品资料和 stt/cpt 只用于本次测试；固定 Agent 参考图会自动参与。</p></div></div><div class="agent-runtime-fields"><div class="agent-runtime-text-fields">${renderAgentRuntimeFields(agent)}</div><div class="field"><label>stt 手托比例参考图 <span class="hint">必填；单品同时锁定产品外观，系列品只锁定真实比例</span></label><input name="product_image" type="file" accept=".jpg,.jpeg,.png,.webp" required></div><div class="field"><label>cpt 系列外观参考图 <span class="hint agent-run-cpt-hint">${needsCpt?'描述词直接引用 cpt，测试时必须上传':'单品不使用；系列品测试必填'}</span></label><input class="agent-run-series-image" data-direct-required="${needsCpt?'1':'0'}" name="series_image" type="file" accept=".jpg,.jpeg,.png,.webp" ${needsCpt?'required':''}></div><div class="field"><label>本次临时追加参考图 <span class="hint agent-run-task-ref-hint">${needsTaskRefs&&!hasFixedReferences?'描述词引用了 {{Agent参考图}} 且没有固定图，至少上传1张':hasFixedReferences?'可选；会与固定参考图一起参与本次测试':'可选；本次测试临时补充，最多8张'}</span></label><input name="reference_images" type="file" accept=".jpg,.jpeg,.png,.webp" multiple ${needsTaskRefs&&!hasFixedReferences?'required':''}></div></div></div><div class="form-actions"><button type="button" class="btn btn-light" data-action="back-agents">返回 Agent 列表</button><button type="button" class="btn btn-light" data-action="save-agent-workspace">仅保存 Agent</button><button type="submit" class="btn btn-primary">${result?'保存并重新出图':'保存并运行测试'}</button></div></form><section class="panel agent-run-result">${result?`<div class="section-head"><div><div class="eyebrow">LATEST RESULT</div><h2>本次测试结果</h2><p>${esc(result.image_size)} · ${esc(result.image_quality)}</p></div></div><img src="${agentRunFileUrl(agent.id,result.file_path)}&v=${Date.now()}" alt="Agent测试结果"><div class="field" style="margin-top:14px"><label>本次变量替换后的描述词</label><textarea readonly>${esc(result.resolved_prompt)}</textarea></div>`:'<div class="empty" style="min-height:420px"><div class="empty-inner"><div class="empty-mark">A</div><h2>等待运行</h2><p style="margin-top:10px">在左侧实时编辑 Agent 描述词，填写测试变量并上传 stt/cpt 后即可出图。</p></div></div>'}</section></div>`;
+      syncAgentImageRequirements($('#agent-run-form'));
+    }
+
+    async function saveAgentWorkspace(form,{rerender=false,quiet=false}={}) {
+      const fd=new FormData();
+      fd.set('agent_id',form.dataset.agentId||'');
+      fd.set('name',$('[name="name"]',form).value);
+      fd.set('image_size',$('[name="image_size"]',form).value);
+      fd.set('image_quality',$('[name="image_quality"]',form).value);
+      fd.set('prompt',$('[name="prompt"]',form).value);
+      fd.set('clear_fixed_references',$('[name="clear_fixed_references"]',form)?.value||'0');
+      const fixedInput=$('.agent-fixed-reference-input',form);
+      [...(fixedInput?.files||[])].slice(0,8).forEach(file=>fd.append('fixed_reference_images',file));
+      const payload=await api('/api/agents',{method:'POST',body:fd});
+      form.dataset.agentId=payload.agent.id;
+      form.dataset.fixedRefCount=String((payload.agent.reference_paths||[]).length);
+      if(!quiet) toast('Agent 定义和固定参考图已保存');
+      if(rerender) await showAgentRunner(payload.agent.id);
+      return payload.agent;
+    }
+
+    async function submitAgentRun(form) {
+      const button=$('button[type=submit]',form);
+      const saveButton=$('[data-action="save-agent-workspace"]',form);
+      button.disabled=true;
+      if(saveButton) saveButton.disabled=true;
+      button.textContent='正在保存并运行…';
+      try {
+        const saved=await saveAgentWorkspace(form,{quiet:true});
+        const inputs=collectAgentRuntimeValues(form);
+        const fd=new FormData(form);
+        fd.set('inputs',JSON.stringify(inputs));
+        const payload=await api(`/api/agents/${encodeURIComponent(saved.id)}/run`,{method:'POST',body:fd});
+        state.agentRunResults[saved.id]=payload.run;
+        toast('已按当前描述词重新出图；固定参考图已随 Agent 保存');
+        await showAgentRunner(saved.id);
+      } catch(e) {
+        toast(e.message);
+        button.disabled=false;
+        if(saveButton) saveButton.disabled=false;
+        button.textContent='保存并运行测试';
+      }
+    }
+
     async function loadProjects() { state.projects = await api('/api/projects'); renderSidebar(); }
     function renderSidebar() { $('#project-list').innerHTML = state.projects.length ? state.projects.map(p=>`<button class="project-item ${state.project?.id===p.id?'active':''}" data-open="${p.id}"><strong>${esc(p.product_name)}</strong><small>${esc(p.status)} · ${date(p.created_at)}</small></button>`).join('') : '<p style="padding:10px;color:#9cb2aa">还没有项目，先创建一组产品图。</p>'; }
     function showEmpty() { $('#page-title').textContent='从一张产品图开始'; $('#page-subtitle').textContent='将工作流里的业务规则变成可以预览、审核和迭代的图片任务。'; $('#view').innerHTML=`<div class="panel empty"><div class="empty-inner"><div class="empty-mark">✦</div><h2>创建你的第一组电商图</h2><p style="margin:12px 0 22px">上传产品身份图，填写需求后，工作台会按任务卡片逐张生成并保留每一次版本。</p><button class="btn btn-primary" data-action="new">开始创建</button></div></div>`; }
      async function showNew() { state.project=null; renderSidebar(); $('#page-title').textContent='新建生成项目'; $('#page-subtitle').textContent='先选择单品或系列品，再按 stt / cpt 角色上传参考图。'; const [defs,settings]=await Promise.all([api('/api/task-definitions'),api('/api/settings')]); $('#view').innerHTML=`<form class="panel" id="project-form"><div class="form-grid"><div class="field"><label>产品名称 <span class="hint">用于项目和文件命名</span></label><input name="product_name" type="text" placeholder="例如：草莓捏捏玩具" required></div><div class="field"><label>stt 手托比例参考图 <span class="hint">必填；单品锁定外观与比例，系列品只锁定比例</span></label><input name="product_image" type="file" accept=".jpg,.jpeg,.png,.webp" required></div><div class="field"><label>cpt 系列外观参考图 <span class="hint series-reference-hint">单品不使用；系列品必填并锁定具体产品外观</span></label><input name="series_image" type="file" accept=".jpg,.jpeg,.png,.webp"></div><div class="field"><label>产品类型</label><select name="is_series"><option value="0" selected>单品</option><option value="1">系列品</option></select></div><div class="field"><label>产品描述、材质和回弹类型</label><input name="product_description" type="text" value="PU材质，慢回弹" placeholder="例如：PU 材质，慢回弹，草莓捏捏玩具"></div><div class="field"><label>产品数量</label><input name="product_count" type="number" min="1" value="1"></div><div class="field full"><label>展示图要求</label><textarea name="display_requirements" placeholder="例如：4 个产品放在可爱的盘子上展示">个产品放在可爱的盘子上展示</textarea></div><div class="field full"><label>自定义使用场景</label><textarea name="custom_scene" placeholder="例如：野餐场景，产品和少量零食一起放在餐布上，背景是虚化的孩子玩耍场景">野餐场景，产品和少量零食一起放在餐布上，背景是虚化的孩子玩耍场景</textarea></div><div class="field full"><label>产品尺寸 <span class="hint">用于图13；没有尺寸时不会编造数值</span></label><input name="product_dimensions" type="text" placeholder="例如：10 x 8 x 5 cm"></div><div class="field full"><label>尺寸图模板 <span class="hint">作为尺寸图唯一内置生成要求；不与全局/单图约束拼接，仍由 GPT-5.5 重写</span></label><select name="size_template_id">${(settings.size_templates||[]).map((t,i)=>`<option value="${esc(t.id)}" ${i===0?'selected':''}>${esc(t.name)}</option>`).join('')}</select></div></div><div class="section"><div class="section-head"><div><h2>工作流任务</h2><p>内置描述词按三种逻辑生成：尺寸展示、氛围摆放、使用场景；每一张图都有独立完整描述词。</p></div><button type="button" class="btn btn-light" data-action="toggle-tasks">全选/取消全选</button></div><div class="task-options" id="task-options">${defs.map(d=>`<label class="task-option"><input type="checkbox" name="task_choice" value="${d.id}" checked><span><b>图${d.id}</b> ${esc(d.name)} <span class="hint">· ${esc(d.logic||'图片任务')}</span><br><span class="hint">${esc(d.brief)}</span></span></label>`).join('')}</div></div><div class="section"><div class="section-head"><div><h2>额外参考图需求</h2><p>每条需求单独出图：产品图 + 本条参考图 + 本条文字要求。可持续增加。</p></div><button type="button" class="btn btn-ghost" data-action="add-extra">+ 添加一条需求</button></div><div class="notice">适合上传风格参考、构图参考、道具参考或动作参考。系统不会把不同需求的参考图混在一起。</div><div class="extra-list" id="extra-list" style="margin-top:12px"></div></div><div class="form-actions"><button type="button" class="btn btn-light" data-action="home">取消</button><button class="btn btn-primary" type="submit">开始生成</button></div></form>`; }
      async function showSettings() { state.project=null; clearInterval(state.poll); renderSidebar(); $('#page-title').textContent='工作台设置'; $('#page-subtitle').textContent='修改 API、模型参数和内置描述词模板，保存后立即生效。'; const s=await api('/api/settings'); $('#view').innerHTML=`<form class="panel" id="settings-form"><div class="section-head"><div><div class="eyebrow">RUNTIME SETTINGS</div><h2>API 与生成参数</h2><p>Key 留空表示保持当前值；页面不会回显完整密钥。</p></div></div><div class="form-grid"><div class="field"><label>默认输出/导出目录 <span class="hint">新建项目使用；已有项目不移动</span></label><input name="output_root" type="text" value="${esc(s.output_root)}"></div><div class="field"><label>图片 API 地址</label><input name="image_api_base_url" type="text" value="${esc(s.image_api_base_url)}"></div><div class="field"><label>图片模型</label><input name="image_model" type="text" value="${esc(s.image_model)}"></div><div class="field"><label>图片 API Key <span class="hint">${esc(s.image_key_masked||'未配置')}</span></label><input name="image_api_key" type="password" placeholder="留空保持不变"></div><div class="field"><label>图片尺寸</label><input name="image_size" type="text" value="${esc(s.image_size)}"></div><div class="field"><label>图片质量</label><input name="image_quality" type="text" value="${esc(s.image_quality)}"></div><div class="field"><label>图片审核模式 <span class="hint">自动 / 低误拦截</span></label><input name="image_moderation" type="text" value="${esc(s.image_moderation)}"></div><div class="field"><label>输出格式</label><select name="image_output_format"><option value="png" ${s.image_output_format==='png'?'selected':''}>PNG</option><option value="jpeg" ${s.image_output_format==='jpeg'?'selected':''}>JPEG</option></select></div><div class="field"><label>提示词 API 地址</label><input name="prompt_api_base_url" type="text" value="${esc(s.prompt_api_base_url)}"></div><div class="field"><label>提示词模型</label><input name="prompt_model" type="text" value="${esc(s.prompt_model)}"></div><div class="field"><label>提示词 API Key <span class="hint">${esc(s.prompt_key_masked||'未配置')}</span></label><input name="prompt_api_key" type="password" placeholder="留空保持不变"></div><div class="field"><label>并发数</label><input name="generation_concurrency" type="number" min="1" max="8" value="${esc(s.generation_concurrency)}"></div><div class="field"><label>API 超时（秒）</label><input name="api_timeout_seconds" type="number" min="10" value="${esc(s.api_timeout_seconds)}"></div><div class="field"><label>上传上限（MB）</label><input name="max_upload_mb" type="number" min="1" value="${esc(s.max_upload_mb)}"></div><div class="field full"><label class="task-option" style="display:flex;max-width:300px"><input name="mock_mode" type="checkbox" ${s.mock_mode?'checked':''}><span>模拟模式（不调用真实图片 API）</span></label></div></div>${renderPromptDesign(s)}<div class="form-actions"><button type="button" class="btn btn-light" data-action="home">返回项目</button><button class="btn btn-primary" type="submit">保存设置</button></div></form>`; }
     function addExtra() { const list=$('#extra-list'); if(!list) return; const index=list.children.length; const row=document.createElement('div'); row.className='extra-row'; row.innerHTML=`<div class="extra-num">${index+1}</div><div class="extra-fields"><input class="extra-files" data-index="${index}" type="file" accept=".jpg,.jpeg,.png,.webp" multiple><textarea class="extra-requirement">参考上传的额外图片进行构图与氛围迁移，保持产品外观、颜色、比例和细节不变。</textarea></div><button type="button" class="remove-extra" data-action="remove-extra" title="删除">×</button>`; list.appendChild(row); }
-    async function submitProject(form) { const fd=new FormData(form); const selected=$$('input[name=task_choice]:checked', form).map(x=>x.value); fd.set('enabled_tasks', JSON.stringify(selected)); const extras=[]; $$('.extra-row',form).forEach((row,i)=>{ const files=$('.extra-files',row); const key=`extra_${i}`; extras.push({upload_key:key, requirement:$('.extra-requirement',row).value}); [...(files.files||[])].forEach(file=>fd.append(key,file)); }); fd.set('extra_requests',JSON.stringify(extras)); const button=$('button[type=submit]',form); button.disabled=true; button.textContent='正在创建…'; try { const result=await api('/api/projects',{method:'POST',body:fd}); toast('项目已创建，生成任务已启动'); await openProject(result.id); } catch(e) { toast(e.message); button.disabled=false; button.textContent='开始生成'; } }
+     async function submitProject(form) { const fd=new FormData(form); const selected=$$('input[name=task_choice]:checked', form).map(x=>x.value); fd.set('enabled_tasks', JSON.stringify(selected)); const extras=[]; $$('#extra-list .extra-row',form).forEach((row,i)=>{ const files=$('.extra-files',row); const key=`extra_${i}`; extras.push({upload_key:key, requirement:$('.extra-requirement',row).value}); [...(files?.files||[])].forEach(file=>fd.append(key,file)); }); fd.set('extra_requests',JSON.stringify(extras)); const button=$('button[type=submit]',form); button.disabled=true; button.textContent='正在创建…'; try { const result=await api('/api/projects',{method:'POST',body:fd}); toast('项目已创建，生成任务已启动'); await openProject(result.id); } catch(e) { toast(e.message); button.disabled=false; button.textContent='开始生成'; } }
     function projectStats(tasks) { return {total:tasks.length, ready:tasks.filter(t=>['ready','approved'].includes(t.status)).length, approved:tasks.filter(t=>t.status==='approved').length, failed:tasks.filter(t=>t.status==='failed').length, generating:tasks.filter(t=>['generating','queued'].includes(t.status)).length}; }
      function taskLogic(task) { return task.prompt_group==='size' || task.prompt_group==='function' ? '尺寸展示' : task.prompt_group==='atmosphere' || task.prompt_group==='placement' ? '氛围摆放' : task.prompt_group==='scene' || task.prompt_group==='usage_scene' ? '使用场景' : '额外参考图'; }
      function renderWorkspace() { const p=state.project; if(!p) return; const s=projectStats(p.tasks); $('#page-title').textContent=p.product_name; $('#page-subtitle').textContent=`项目创建于 ${date(p.created_at)} · ${p.status}`; renderSidebar(); const progress=s.total?Math.round(s.approved/s.total*100):0; const groups=[['尺寸展示',p.tasks.filter(t=>taskLogic(t)==='尺寸展示')],['氛围摆放',p.tasks.filter(t=>taskLogic(t)==='氛围摆放')],['使用场景',p.tasks.filter(t=>taskLogic(t)==='使用场景')],['额外参考图',p.tasks.filter(t=>taskLogic(t)==='额外参考图')]].filter(([,tasks])=>tasks.length); $('#view').innerHTML=`<div class="panel"><div class="workspace-head"><div><div class="eyebrow">PROJECT WORKSPACE</div><h2>${esc(p.product_name)}</h2><p>${esc(p.product_description||'未填写产品描述')} · 每张图独立生成完整中文描述词</p></div><div class="head-actions"><button class="btn btn-light" data-action="refresh">刷新状态</button><button class="btn btn-ghost" data-action="refresh-prompts">重新分析全部描述词</button>${s.failed?'<button class="btn btn-danger" data-action="retry-failed">批量重试失败</button>':''}<a class="btn btn-ghost" href="/api/export?project=${encodeURIComponent(p.id)}">导出最终图</a><button class="btn btn-danger" data-action="delete-project">删除项目</button></div></div><div class="stats"><div class="stat"><b>${s.total}</b><span>任务总数</span></div><div class="stat"><b>${s.ready}</b><span>已生成</span></div><div class="stat"><b>${s.approved}</b><span>已确认</span></div><div class="stat"><b>${s.generating}</b><span>生成中</span></div><div class="stat"><b>${s.failed}</b><span>失败</span></div></div><div class="progress-line"><i style="width:${progress}%"></i></div><p>${progress}% 已确认 · 每张图均单独保存完整提示词和版本记录</p><div class="ref-strip"><img class="ref-thumb" src="${fileUrl(p.id,p.input_product_path)}"><div><h3>stt 手托比例参考图</h3><p>${p.is_series?'系列品：只锁定手与产品的真实大小比例，不参与产品外观判断。':'单品：同时锁定产品外观和手与产品的真实大小比例。'}</p></div></div>${p.is_series&&p.input_series_path?'<div class="ref-strip"><img class="ref-thumb" src="'+fileUrl(p.id,p.input_series_path)+'"><div><h3>cpt 系列外观参考图</h3><p>系列品的唯一产品外观锚点。</p></div></div>':''}</div>${groups.map(([name,tasks])=>`<section class="logic-section"><h3>${name} <span class="hint">${tasks.length} 张</span></h3><div class="task-grid">${tasks.map(renderTaskCard).join('')}</div></section>`).join('')}`; }
-     function renderTaskCard(task) { const versions=task.versions||[]; const latest=versions.length?versions[versions.length-1].id:''; const defaultVersion=task.status==='approved'?task.selected_version_id:latest; const selected=state.viewVersions[task.id] || defaultVersion; const version=versions.find(v=>v.id===selected) || versions[versions.length-1]; const busy=['queued','generating'].includes(task.status); const img=version?`<img src="${fileUrl(state.project.id,version.file_path)}&v=${encodeURIComponent(version.created_at)}" alt="${esc(task.task_name)}">`:'<div class="image-placeholder">等待生成第一版图片</div>'; const statusText={queued:'排队中',generating:'生成中',ready:'待审核',approved:'已确认',failed:'失败',pending:'待处理'}[task.status]||task.status; return `<article class="task-card ${task.task_kind==='extra'?'extra':''}" data-task="${task.id}"><div class="card-top"><h3><span class="task-id">${esc(task.slot_id)}</span>${esc(task.task_name)} <span class="hint">· ${taskLogic(task)}</span></h3><span class="status ${task.status}">${statusText}</span></div><div class="image-box">${img}</div><div class="card-body"><div class="version-row"><span>${version?`当前查看：v${String(version.version_number).padStart(2,'0')} · ${esc(version.mode)}`:'暂无版本'}</span>${versions.length?`<select class="version-select" data-action="view-version">${versions.map(v=>`<option value="${v.id}" ${v.id===selected?'selected':''}>v${String(v.version_number).padStart(2,'0')} · ${v.mode}${v.is_approved?' · 已确认':''}</option>`).join('')}</select>`:''}</div><textarea class="prompt-input" placeholder="完整中文描述词">${esc(state.promptDrafts[task.id] ?? task.current_prompt ?? '')}</textarea><textarea class="edit-input edit-box" placeholder="局部修改要求，例如：将产品缩小 15%，保持其他内容不变">${esc(state.editDrafts[task.id]||'')}</textarea><div class="card-actions"><button class="btn btn-primary" data-action="regenerate" ${busy?'disabled':''}>修改描述词重新生成</button><button class="btn btn-ghost" data-action="edit" ${busy||!version?'disabled':''}>直接编辑当前图片</button><button class="btn btn-light" data-action="approve" ${busy||!version?'disabled':''}>确认当前版本</button><button class="btn btn-light" data-action="download" ${!version?'disabled':''}>下载</button>${task.status==='failed'?'<button class="btn btn-danger" data-action="retry">重试</button>':''}</div>${task.last_error?`<div class="error">${esc(task.last_error)}</div>`:''}<div class="card-foot">${versions.length?`历史版本 ${versions.length} 个 · 父版本链可追溯`:'尚未产生版本'}${task.task_kind==='extra'?' · 本图来自额外参考图需求':''}</div></div></article>`; }
+     function renderTaskCard(task) { const versions=task.versions||[]; const latest=versions.length?versions[versions.length-1].id:''; const defaultVersion=task.status==='approved'?task.selected_version_id:latest; const selected=state.viewVersions[task.id] || defaultVersion; const version=versions.find(v=>v.id===selected) || versions[versions.length-1]; const busy=['queued','generating'].includes(task.status); const img=version?`<img src="${fileUrl(state.project.id,version.file_path)}&v=${encodeURIComponent(version.created_at)}" alt="${esc(task.task_name)}">`:'<div class="image-placeholder">等待生成第一版图片</div>'; const statusText={queued:'排队中',generating:'生成中',ready:'待审核',approved:'已确认',failed:'失败',pending:'待处理'}[task.status]||task.status; const taskClass=task.task_kind==='extra'?'extra':task.task_kind==='agent'?'agent':''; const inputSummary=Object.entries(task.agent_inputs||{}).filter(([,value])=>value).map(([key,value])=>`${key}=${value}`).join('；'); const agentMeta=task.task_kind==='agent'?` · Agent参数：${esc(task.generation_size)} / ${esc(task.generation_quality)}${inputSummary?` · 项目变量快照：${esc(inputSummary)}`:''}`:''; return `<article class="task-card ${taskClass}" data-task="${task.id}"><div class="card-top"><h3><span class="task-id">${esc(task.slot_id)}</span>${esc(task.task_name)} <span class="hint">· ${taskLogic(task)}</span></h3><span class="status ${task.status}">${statusText}</span></div><div class="image-box">${img}</div><div class="card-body"><div class="version-row"><span>${version?`当前查看：v${String(version.version_number).padStart(2,'0')} · ${esc(version.mode)}`:'暂无版本'}</span>${versions.length?`<select class="version-select" data-action="view-version">${versions.map(v=>`<option value="${v.id}" ${v.id===selected?'selected':''}>v${String(v.version_number).padStart(2,'0')} · ${v.mode}${v.is_approved?' · 已确认':''}</option>`).join('')}</select>`:''}</div><textarea class="prompt-input" placeholder="完整中文描述词">${esc(state.promptDrafts[task.id] ?? task.current_prompt ?? '')}</textarea><textarea class="edit-input edit-box" placeholder="局部修改要求，例如：将产品缩小 15%，保持其他内容不变">${esc(state.editDrafts[task.id]||'')}</textarea><div class="card-actions"><button class="btn btn-primary" data-action="regenerate" ${busy?'disabled':''}>修改描述词重新生成</button><button class="btn btn-ghost" data-action="edit" ${busy||!version?'disabled':''}>直接编辑当前图片</button><button class="btn btn-light" data-action="approve" ${busy||!version?'disabled':''}>确认当前版本</button><button class="btn btn-light" data-action="download" ${!version?'disabled':''}>下载</button>${task.status==='failed'?'<button class="btn btn-danger" data-action="retry">重试</button>':''}</div>${task.last_error?`<div class="error">${esc(task.last_error)}</div>`:''}<div class="card-foot">${versions.length?`历史版本 ${versions.length} 个 · 父版本链可追溯`:'尚未产生版本'}${task.task_kind==='extra'?' · 本图来自额外参考图需求':''}${agentMeta}</div></div></article>`; }
     async function openProject(id) { clearInterval(state.poll); if(state.project?.id!==id) { state.promptDrafts={}; state.editDrafts={}; } state.project=await api(`/api/projects/${id}`); renderWorkspace(); state.poll=setInterval(async()=>{ if(!state.project) return; try { const updated=await api(`/api/projects/${state.project.id}`); state.project=updated; const active=document.activeElement; if(!active?.matches('.prompt-input,.edit-input')) renderWorkspace(); } catch(e){} },2200); }
      async function act(action, card) { const taskId=card.dataset.task; const task=state.project.tasks.find(t=>t.id===taskId); const promptValue=$('.prompt-input',card)?.value||''; const editValue=$('.edit-input',card)?.value||''; try { if(action==='regenerate') { delete state.viewVersions[taskId]; await api(`/api/tasks/${taskId}/regenerate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:promptValue})}); task.current_prompt=promptValue; delete state.promptDrafts[taskId]; toast('已提交重新生成'); } if(action==='edit') { delete state.viewVersions[taskId]; await api(`/api/tasks/${taskId}/edit`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({change_request:editValue})}); delete state.editDrafts[taskId]; toast('已提交局部编辑'); } if(action==='approve') { const select=$('.version-select',card); await api(`/api/tasks/${taskId}/approve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({version_id:select.value})}); toast('已确认当前版本'); } if(action==='retry') { delete state.viewVersions[taskId]; await api(`/api/tasks/${taskId}/retry`,{method:'POST'}); toast('已重新排队'); } if(action==='download') { const select=$('.version-select',card); const version=(task.versions||[]).find(v=>v.id===(select?.value||task.selected_version_id)) || task.versions[task.versions.length-1]; if(version) window.open(fileUrl(state.project.id,version.file_path),'_blank'); } } catch(e){toast(e.message);} }
      async function refreshPrompts(button) { if(!state.project) return; button.disabled=true; button.textContent='分析中…'; try { await api(`/api/projects/${state.project.id}/refresh-prompts`,{method:'POST'}); state.project=await api(`/api/projects/${state.project.id}`); renderWorkspace(); toast('已为每一张图重新生成独立中文描述词'); } catch(e) { toast(e.message); button.disabled=false; button.textContent='重新分析全部描述词'; } }
      async function retryFailed(button) { if(!state.project) return; button.disabled=true; button.textContent='重新生成中…'; try { await api(`/api/projects/${state.project.id}/retry-failed`,{method:'POST'}); toast('失败任务已批量重新排队'); } catch(e) { toast(e.message); button.disabled=false; button.textContent='批量重试失败'; } }
      async function submitSettings(form) { const task_briefs={}; $$('.settings-task',form).forEach(el=>task_briefs[el.dataset.taskId]=el.value); const group_constraints={}; $('.group-constraint',form).forEach(el=>group_constraints[el.dataset.group]=el.value); const size_templates=$('.size-template-row',form).map(row=>({id:row.dataset.templateId,name:$('.size-template-name',row).value,prompt:$('.size-template-prompt',row).value})); const payload={output_root:$('[name=output_root]',form).value,image_api_base_url:$('[name=image_api_base_url]',form).value,image_api_key:$('[name=image_api_key]',form).value,image_model:$('[name=image_model]',form).value,image_size:$('[name=image_size]',form).value,image_quality:$('[name=image_quality]',form).value,image_moderation:$('[name=image_moderation]',form).value,image_output_format:$('[name=image_output_format]',form).value,prompt_api_base_url:$('[name=prompt_api_base_url]',form).value,prompt_api_key:$('[name=prompt_api_key]',form).value,prompt_model:$('[name=prompt_model]',form).value,generation_concurrency:$('[name=generation_concurrency]',form).value,api_timeout_seconds:$('[name=api_timeout_seconds]',form).value,max_upload_mb:$('[name=max_upload_mb]',form).value,mock_mode:$('[name=mock_mode]',form).checked,runtime:{group_constraints,task_briefs,size_templates}}; const button=$('button[type=submit]',form); button.disabled=true; button.textContent='保存中…'; try { await api('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); toast('设置已保存并立即生效'); await showSettings(); } catch(e) { toast(e.message); button.disabled=false; button.textContent='保存设置'; } }
-    $('#top-new').onclick=showNew; $('#side-new').onclick=showNew; $('#side-settings').onclick=showSettings;
+    $('#top-new').onclick=showNew; $('#side-new').onclick=showNew; $('#side-settings').onclick=showSettings; $('#side-agents').onclick=()=>showAgents();
     function ensureImageQualitySelect() {
       const input=$('input[name="image_quality"]');
       if(!input) return;
@@ -354,6 +605,28 @@
         return;
       }
       if(btn.dataset.action==='add-function') addFunctionRequest();
+      if(btn.dataset.action==='insert-agent-variable') {
+        e.preventDefault();
+        e.stopPropagation();
+        const textarea=$('textarea[name="prompt"]',btn.closest('form'));
+        if(textarea) {
+          const token=`{{${btn.dataset.variable}}}`;
+          const start=textarea.selectionStart??textarea.value.length;
+          const end=textarea.selectionEnd??start;
+          const pattern=agentVariablePattern(btn.dataset.variable);
+          if(pattern.test(textarea.value)) {
+            pattern.lastIndex=0;
+            textarea.value=textarea.value.replace(pattern,'');
+            textarea.selectionStart=textarea.selectionEnd=Math.min(start,textarea.value.length);
+          } else {
+            textarea.value=textarea.value.slice(0,start)+token+textarea.value.slice(end);
+            textarea.selectionStart=textarea.selectionEnd=start+token.length;
+          }
+          textarea.focus();
+          syncAgentVariableButtons(btn.closest('form'));
+        }
+        return;
+      }
       if(btn.dataset.action==='remove-function') {
         btn.closest('.function-request-row')?.remove();
         $$('.function-request-row').forEach((row,i)=>$('.extra-num',row).textContent=i+1);
@@ -362,10 +635,16 @@
     document.addEventListener('submit', e=>{
       if(e.target.id!=='project-form') return;
       const form=e.target;
-      const requests=$$('.function-request-row',form).map(row=>({
-        template_id:$('.function-template-select',row).value,
-        name:$('.function-task-name',row).value
-      }));
+      const requests=$$('.function-request-row',form).map((row,index)=>{
+        const [source_type,source_id]=($('.function-source-select',row).value||'').split(':',2);
+        if(source_type==='agent') {
+          const reference_upload_key=`agent_ref_${index}`;
+          const fileInput=$('.agent-request-files',row);
+          if(fileInput) fileInput.name=reference_upload_key;
+          return {source_type:'agent',agent_id:source_id,name:$('.function-task-name',row).value,reference_upload_key};
+        }
+        return {source_type:'template',template_id:source_id,name:$('.function-task-name',row).value};
+      });
       let field=$('input[name="function_requests"]',form);
       if(!field) {
         field=document.createElement('input');
@@ -375,10 +654,10 @@
       }
       field.value=JSON.stringify(requests);
     },true);
-    document.addEventListener('input', e=>{ const card=e.target.closest?.('[data-task]'); if(!card) return; const taskId=card.dataset.task; if(e.target.matches('.prompt-input')) state.promptDrafts[taskId]=e.target.value; if(e.target.matches('.edit-input')) state.editDrafts[taskId]=e.target.value; });
-     document.addEventListener('click', async e=>{ const open=e.target.closest('[data-open]'); if(open) return openProject(open.dataset.open); const btn=e.target.closest('[data-action]'); if(!btn) return; const action=btn.dataset.action; if(action==='prompt-tab') { const section=btn.closest('.section'); $$('.logic-tab',section).forEach(el=>el.classList.toggle('active',el.dataset.group===btn.dataset.group)); $$('.constraint-panel',section).forEach(el=>el.classList.toggle('active',el.dataset.promptPanel===btn.dataset.group)); return; } if(action==='add-size-template') return addSizeTemplate(); if(action==='remove-size-template') { const rows=$('.size-template-row'); if(rows.length<=1) return toast('至少保留一个尺寸图模板'); btn.closest('.size-template-row').remove(); return; } if(action==='new') return showNew(); if(action==='home') { state.project=null; renderSidebar(); showEmpty(); return; } if(action==='add-extra') return addExtra(); if(action==='remove-extra') { btn.closest('.extra-row').remove(); $$('.extra-row').forEach((row,i)=>$('.extra-num',row).textContent=i+1); return; } if(action==='toggle-tasks') { const boxes=$$('input[name=task_choice]'); const all=boxes.every(x=>x.checked); boxes.forEach(x=>x.checked=!all); return; } if(action==='refresh' && state.project) { state.project=await api(`/api/projects/${state.project.id}`); renderWorkspace(); return; } if(action==='refresh-prompts') return refreshPrompts(btn); if(action==='retry-failed') return retryFailed(btn); if(action==='delete-project' && state.project && confirm('确定软删除这个项目吗？图片不会立即清理。')) { await api(`/api/projects/${state.project.id}`,{method:'DELETE'}); toast('项目已移入回收状态'); state.project=null; await loadProjects(); showEmpty(); return; } const card=btn.closest('[data-task]'); if(card && ['regenerate','edit','approve','retry','download'].includes(action)) return act(action,card); });
-    document.addEventListener('change', e=>{ if(e.target.matches('[name="is_series"]')) { const input=$('[name="series_image"]',e.target.form); const hint=$('.series-reference-hint',e.target.form); const series=e.target.value==='1'; if(input) input.required=series; if(hint) hint.textContent=series?'系列品必填；锁定具体产品外观':'单品不使用；系列品必填并锁定具体产品外观'; } if(e.target.matches('[data-action="view-version"]')) { state.viewVersions[e.target.closest('[data-task]').dataset.task]=e.target.value; renderWorkspace(); } });
-    document.addEventListener('submit', e=>{ if(e.target.id==='project-form'){e.preventDefault(); submitProject(e.target);} if(e.target.id==='settings-form'){e.preventDefault(); submitSettingsFixed(e.target);} });
+    document.addEventListener('input', e=>{ if(e.target.matches?.('#agent-form textarea[name="prompt"]')) syncAgentVariableButtons(e.target.form); const card=e.target.closest?.('[data-task]'); if(!card) return; const taskId=card.dataset.task; if(e.target.matches('.prompt-input')) state.promptDrafts[taskId]=e.target.value; if(e.target.matches('.edit-input')) state.editDrafts[taskId]=e.target.value; });
+     document.addEventListener('click', async e=>{ const open=e.target.closest('[data-open]'); if(open) return openProject(open.dataset.open); const btn=e.target.closest('[data-action]'); if(!btn) return; const action=btn.dataset.action; if(action==='new-agent') return showAgentRunner('new'); if(action==='edit-agent'||action==='run-agent') return showAgentRunner(btn.dataset.agentId); if(action==='back-agents') return showAgents(); if(action==='save-agent-workspace') { const form=btn.closest('#agent-run-form'); btn.disabled=true; btn.textContent='保存中…'; try { await saveAgentWorkspace(form,{rerender:true}); } catch(error) { toast(error.message); btn.disabled=false; btn.textContent='仅保存 Agent'; } return; } if(action==='clear-agent-fixed-refs') { const form=btn.closest('#agent-run-form'); $('[name="clear_fixed_references"]',form).value='1'; const input=$('.agent-fixed-reference-input',form); if(input) input.value=''; const refs=$('.agent-existing-refs',form); if(refs) refs.style.opacity='.35'; const hint=$('.fixed-reference-change-hint',form); if(hint) hint.textContent=Number(form.dataset.fixedRefCount||0)?'保存后将清空全部固定参考图。':'已取消本次待绑定图片。'; btn.disabled=Number(form.dataset.fixedRefCount||0)===0; syncAgentImageRequirements(form); return; } if(action==='delete-agent') { if(!confirm('确定删除这个 Agent 吗？固定参考图会一起删除；已创建项目中的任务和图片不受影响。')) return; try { await api(`/api/agents/${encodeURIComponent(btn.dataset.agentId)}`,{method:'DELETE'}); toast('Agent 已删除'); await showAgents(); } catch(error) { toast(error.message); } return; } if(action==='prompt-tab') { const section=btn.closest('.section'); $$('.logic-tab',section).forEach(el=>el.classList.toggle('active',el.dataset.group===btn.dataset.group)); $$('.constraint-panel',section).forEach(el=>el.classList.toggle('active',el.dataset.promptPanel===btn.dataset.group)); return; } if(action==='add-size-template') return addSizeTemplate(); if(action==='remove-size-template') { const rows=$$('.size-template-row'); if(rows.length<=1) return toast('至少保留一个尺寸图模板'); btn.closest('.size-template-row').remove(); return; } if(action==='new') return showNew(); if(action==='home') { state.project=null; renderSidebar(); showEmpty(); return; } if(action==='add-extra') return addExtra(); if(action==='remove-extra') { btn.closest('.extra-row').remove(); $$('.extra-row').forEach((row,i)=>$('.extra-num',row).textContent=i+1); return; } if(action==='toggle-tasks') { const boxes=$$('input[name=task_choice]'); const all=boxes.every(x=>x.checked); boxes.forEach(x=>x.checked=!all); return; } if(action==='refresh' && state.project) { state.project=await api(`/api/projects/${state.project.id}`); renderWorkspace(); return; } if(action==='refresh-prompts') return refreshPrompts(btn); if(action==='retry-failed') return retryFailed(btn); if(action==='delete-project' && state.project && confirm('确定软删除这个项目吗？图片不会立即清理。')) { await api(`/api/projects/${state.project.id}`,{method:'DELETE'}); toast('项目已移入回收状态'); state.project=null; await loadProjects(); showEmpty(); return; } const card=btn.closest('[data-task]'); if(card && ['regenerate','edit','approve','retry','download'].includes(action)) return act(action,card); });
+    document.addEventListener('change', e=>{ if(e.target.matches('[name="is_series"]')) { const input=$('[name="series_image"]',e.target.form); const hint=$('.series-reference-hint',e.target.form); const series=e.target.value==='1'; if(input) input.required=series; if(hint) hint.textContent=series?'系列品必填；锁定具体产品外观':'单品不使用；系列品必填并锁定具体产品外观'; } if(e.target.matches('.agent-run-product-type')) syncAgentImageRequirements(e.target.form); if(e.target.matches('.agent-fixed-reference-input')) { const form=e.target.form; if(e.target.files.length) $('[name="clear_fixed_references"]',form).value='0'; const clearButton=$('[data-action="clear-agent-fixed-refs"]',form); if(clearButton) clearButton.disabled=!e.target.files.length&&Number(form.dataset.fixedRefCount||0)===0; const hint=$('.fixed-reference-change-hint',form); if(hint) hint.textContent=e.target.files.length?`已选择 ${e.target.files.length} 张；保存后替换当前全部固定参考图。`:'未选择新图片。'; syncAgentImageRequirements(form); } if(e.target.matches('.function-source-select')) updateFunctionRequestRow(e.target.closest('.function-request-row')); if(e.target.matches('[data-action="view-version"]')) { state.viewVersions[e.target.closest('[data-task]').dataset.task]=e.target.value; renderWorkspace(); } });
+     document.addEventListener('submit', e=>{ if(e.target.id==='project-form'){e.preventDefault(); submitProject(e.target);} if(e.target.id==='settings-form'){e.preventDefault(); submitSettingsFixed(e.target);} if(e.target.id==='agent-run-form'){e.preventDefault(); submitAgentRun(e.target);} });
     (async()=>{ try { await loadProjects(); if(state.projects.length) await openProject(state.projects[0].id); else showEmpty(); } catch(e){toast(e.message);} })();
   </script>
 </body>

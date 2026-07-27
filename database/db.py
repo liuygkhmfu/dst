@@ -36,6 +36,10 @@ CREATE TABLE IF NOT EXISTS image_tasks (
     original_prompt TEXT NOT NULL DEFAULT '',
     current_prompt TEXT NOT NULL DEFAULT '',
     reference_fields_json TEXT NOT NULL DEFAULT '[]',
+    generation_size TEXT NOT NULL DEFAULT '',
+    generation_quality TEXT NOT NULL DEFAULT '',
+    agent_id TEXT NOT NULL DEFAULT '',
+    agent_inputs_json TEXT NOT NULL DEFAULT '{}',
     status TEXT NOT NULL DEFAULT 'pending',
     selected_version_id TEXT,
     last_error TEXT NOT NULL DEFAULT '',
@@ -114,6 +118,15 @@ class Database:
             project_columns = {row["name"] for row in conn.execute("PRAGMA table_info(projects)")}
             if "size_template_id" not in project_columns:
                 conn.execute("ALTER TABLE projects ADD COLUMN size_template_id TEXT NOT NULL DEFAULT 'size-01'")
+            task_columns = {row["name"] for row in conn.execute("PRAGMA table_info(image_tasks)")}
+            if "generation_size" not in task_columns:
+                conn.execute("ALTER TABLE image_tasks ADD COLUMN generation_size TEXT NOT NULL DEFAULT ''")
+            if "generation_quality" not in task_columns:
+                conn.execute("ALTER TABLE image_tasks ADD COLUMN generation_quality TEXT NOT NULL DEFAULT ''")
+            if "agent_id" not in task_columns:
+                conn.execute("ALTER TABLE image_tasks ADD COLUMN agent_id TEXT NOT NULL DEFAULT ''")
+            if "agent_inputs_json" not in task_columns:
+                conn.execute("ALTER TABLE image_tasks ADD COLUMN agent_inputs_json TEXT NOT NULL DEFAULT '{}'")
 
     @staticmethod
     def one(row: sqlite3.Row | None) -> dict[str, Any] | None:

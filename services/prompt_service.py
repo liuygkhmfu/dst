@@ -23,6 +23,7 @@ PROMPT_VARIABLES = [
     {"name": "手托比例参考图", "kind": "图片变量", "source": "原工作流 stt；锁定手与产品的真实比例，单品同时锁定外观"},
     {"name": "系列外观参考图", "kind": "图片变量", "source": "原工作流 cpt；仅系列品使用并锚定具体产品外观"},
     {"name": "额外需求参考图", "kind": "图片变量", "source": "每条额外需求单独上传的参考图"},
+    {"name": "Agent参考图", "kind": "图片变量", "source": "Agent 定义中固定绑定的参考图，也可在测试或套图任务中临时追加多张"},
     {"name": "stt", "kind": "兼容图片变量", "source": "等同手托比例参考图"},
     {"name": "cpt", "kind": "兼容图片变量", "source": "等同系列外观参考图"},
     {"name": "产品名", "kind": "文字变量", "source": "新建项目时填写的产品名称"},
@@ -38,6 +39,8 @@ REFERENCE_LABELS = (
     "【手托比例参考图】",
     "【系列外观参考图】",
     "【额外需求参考图】",
+    "【智能体任务参考图】",
+    "【智能体专属参考图】",
 )
 GENERIC_REFERENCE_IMAGE_PATTERN = re.compile(
     r"(?:(?:随附|所附)(?:的)?(?:输入)?|(?:已上传|上传|输入|提供)(?:的)?)"
@@ -121,6 +124,7 @@ class PromptService:
             "手托比例参考图": scale_reference,
             "系列外观参考图": series_appearance,
             "额外需求参考图": "【额外需求参考图】",
+            "Agent参考图": "【智能体任务参考图】",
             "stt": scale_reference,
             "cpt": series_appearance,
             "产品名": str(project.get("product_name") or "未命名产品"),
@@ -134,8 +138,14 @@ class PromptService:
         }
 
     @classmethod
-    def render_template(cls, template: str, project: dict[str, Any]) -> str:
+    def render_template(
+        cls,
+        template: str,
+        project: dict[str, Any],
+        extra_values: dict[str, Any] | None = None,
+    ) -> str:
         values = cls.template_values(project)
+        values.update({str(key): str(value) for key, value in (extra_values or {}).items()})
 
         def replace(match: re.Match[str]) -> str:
             name = match.group(1).strip()
@@ -362,8 +372,15 @@ class PromptService:
         template: dict[str, str],
         stt_path: Path,
         cpt_path: Path | None = None,
+        additional_reference_paths: list[Path] | None = None,
+        template_variables: dict[str, Any] | None = None,
     ) -> str:
         """Rewrite one user-selected function template with the prompt model."""
+        rendered_template = self.render_template(
+            str(template.get("prompt") or ""),
+            project,
+            template_variables,
+        )
         definition = {
             "id": "99",
             "name": str(template.get("name") or "追加功能图"),
@@ -371,7 +388,7 @@ class PromptService:
             "prompt_group": "function",
             "logic": "功能图",
             "reference_fields": ["stt", "cpt"],
-            "brief": str(template.get("prompt") or ""),
+            "brief": rendered_template,
         }
         local = self._canonicalize_reference_labels(
             self._normalize_chinese_prompt(self.render_template(definition["brief"], project), allow_size_labels=True),
@@ -386,6 +403,15 @@ class PromptService:
             return local
         try:
             image_inputs = self._analysis_image_inputs(project, stt_path, cpt_path)
+            image_inputs.extend(
+                {
+                    "path": path,
+                    "label": f"智能体任务参考图{index}",
+                    "purpose": "这是当前 Agent 任务的专属参考图，可能来自 Agent 固定绑定或本次临时追加；仅服务于构图、风格、动作或功能要求，不得覆盖产品外观和真实比例。",
+                }
+                for index, path in enumerate(additional_reference_paths or [], 1)
+                if path.exists()
+            )
             result = self._request_prompts(project, image_inputs, [definition], ["99"])
             candidate = self._clean_prompt(result.get("99", ""), allow_size_labels=True)
             candidate = self._canonicalize_reference_labels(candidate, definition)
