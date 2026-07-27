@@ -8,10 +8,13 @@ from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
+import pytest
+
 from config.settings import IMAGE_QUALITY_OPTIONS, get_settings, normalize_image_quality
 from config.runtime_config import RuntimeConfigStore
 from database.db import Database
 from database.repositories import Repository
+from services.agent_service import AgentStore
 from services.prompt_service import PromptService, parse_prompt_response
 from services.storage_service import StorageService, make_mock_png, read_image_info, safe_name
 
@@ -511,3 +514,303 @@ def test_analysis_reference_order_matches_single_and_series_rules(tmp_path: Path
     assert "外观与手托比例" in single[0]["purpose"]
     assert [item["label"] for item in series] == ["系列外观参考图", "手托比例参考图"]
     assert "只锚定" in series[1]["purpose"]
+
+
+def test_agent_store_persists_definition_variables_and_replaceable_fixed_references(tmp_path: Path):
+    store = AgentStore(tmp_path / "data")
+    saved = store.save_agent(
+        {
+            "name": "竖版卖点图 Agent",
+            "prompt": "结合{{Agent参考图}}，按照{{自定义使用场景}}制作竖版卖点功能图。",
+            "image_size": "1024x1536",
+            "image_quality": "high",
+        },
+        [{"filename": "style.png", "content": make_mock_png("agent-style"), "content_type": "image/png"}],
+    )
+    assert saved["id"].startswith("agent-")
+    assert saved["image_size"] == "1024x1536"
+    assert saved["image_quality"] == "high"
+    assert len(saved["reference_paths"]) == 1
+    assert saved["input_schema"] == []
+    assert saved["project_variables"] == ["自定义使用场景", "Agent参考图"]
+    reloaded = AgentStore(tmp_path / "data").get(saved["id"])
+    assert reloaded["name"] == "竖版卖点图 Agent"
+    assert reloaded["reference_paths"] == saved["reference_paths"]
+    assert store.resolve_reference_file(saved["id"], saved["reference_paths"][0]).is_file()
+    replaced = store.save_agent(
+        {
+            "agent_id": saved["id"],
+            "name": saved["name"],
+            "prompt": saved["prompt"],
+            "image_size": saved["image_size"],
+            "image_quality": saved["image_quality"],
+        },
+        [{"filename": "new-layout.png", "content": make_mock_png("new-layout"), "content_type": "image/png"}],
+    )
+    assert len(replaced["reference_paths"]) == 1
+    assert "new-layout" in replaced["reference_paths"][0]
+    assert replaced["reference_paths"][0] != saved["reference_paths"][0]
+
+
+def test_agent_variables_are_exposed_as_new_project_inputs_in_ui():
+    html = (Path(__file__).parents[1] / "ui" / "index.html").read_text(encoding="utf-8")
+    assert "与“新建生成项目”完全一致的可用变量" in html
+    assert "stt/cpt 等图片变量" in html
+    assert 'name="product_image"' in html
+    assert 'name="series_image"' in html
+    assert "reference_upload_key" in html
+    assert "agentVariablePattern" in html
+    assert "× 删除" in html
+    assert "打开 Agent 工作台" in html
+    assert "保存并重新出图" in html
+    assert "fixed_reference_images" in html
+    assert "agent-request-input" not in html
+
+
+def test_agent_can_be_appended_with_current_task_refs_variables_and_image_parameters(tmp_path: Path):
+    from services.generation_service import GenerationService
+
+    settings = replace(
+        get_settings(tmp_path),
+        data_dir=tmp_path / "data",
+        output_root=tmp_path / "outputs",
+        db_path=tmp_path / "data" / "app.db",
+        prompt_api_key="",
+        mock_mode=True,
+    )
+    agent_store = AgentStore(settings.data_dir)
+    agent = agent_store.save_agent(
+        {
+            "name": "横版氛围卖点 Agent",
+                "prompt": (
+                    "制作独立横版功能图，产品外观严格参考{{产品外观参考图}}，产品真实比例参考{{手托比例参考图}}，"
+                    "构图和氛围参考{{Agent参考图}}，场景是{{自定义使用场景}}，参考图不得覆盖产品身份，产品必须完整清晰并作为视觉主体。"
+            ),
+            "image_size": "1536x1024",
+            "image_quality": "high",
+        },
+    )
+    repo = Repository(Database(settings.db_path))
+    service = GenerationService(settings, repo, StorageService(settings.output_root))
+    product = {"filename": "product.png", "content": make_mock_png("product"), "content_type": "image/png"}
+    project_id = service.create_project(
+        {
+            "product_name": "Agent测试产品",
+            "custom_scene": "夏日海边礼物场景",
+            "enabled_tasks": "[]",
+            "function_requests": json.dumps(
+                [
+                    {
+                        "source_type": "agent",
+                        "agent_id": agent["id"],
+                        "name": "Agent功能图",
+                        "reference_upload_key": "agent_ref_0",
+                    }
+                ],
+                ensure_ascii=False,
+            ),
+        },
+        product,
+        None,
+        {
+            "agent_ref_0": [
+                {"filename": "layout.png", "content": make_mock_png("agent-layout"), "content_type": "image/png"},
+                {"filename": "style.png", "content": make_mock_png("agent-style"), "content_type": "image/png"},
+            ]
+        },
+    )
+    service._run_initial(project_id)
+    tasks = repo.get_tasks(project_id)
+    assert len(tasks) == 1
+    task = tasks[0]
+    assert task["task_kind"] == "agent"
+    assert task["agent_id"] == agent["id"]
+    assert task["generation_size"] == "1536x1024"
+    assert task["generation_quality"] == "high"
+    assert task["agent_inputs"]["自定义使用场景"] == "夏日海边礼物场景"
+    assert task["agent_inputs"]["产品外观参考图"] == "【产品外观参考图】"
+    assert task["agent_inputs"]["Agent参考图"] == "【智能体任务参考图】"
+    assert len(task["reference_fields"]) == 4
+    assert "夏日海边礼物场景" in task["current_prompt"]
+    assert len(task["versions"]) == 1
+    version = task["versions"][0]
+    assert version["size"] == "1536x1024"
+    assert version["quality"] == "high"
+    usage = json.loads(version["api_usage_json"])
+    assert [item["label"] for item in usage["reference_inputs"]] == [
+        "手托比例参考图",
+        "智能体任务参考图1",
+        "智能体任务参考图2",
+    ]
+
+
+def test_agent_fixed_references_are_automatically_copied_into_suite_task(tmp_path: Path):
+    from services.generation_service import GenerationService
+
+    settings = replace(
+        get_settings(tmp_path),
+        data_dir=tmp_path / "data",
+        output_root=tmp_path / "outputs",
+        db_path=tmp_path / "data" / "app.db",
+        prompt_api_key="",
+        mock_mode=True,
+    )
+    agent_store = AgentStore(settings.data_dir)
+    agent = agent_store.save_agent(
+        {
+            "name": "固定构图 Agent",
+            "prompt": "严格参考{{Agent参考图}}的构图，以{{stt}}锁定产品外观和比例。",
+            "image_size": "1024x1024",
+            "image_quality": "medium",
+        },
+        [{"filename": "fixed-layout.png", "content": make_mock_png("fixed-layout"), "content_type": "image/png"}],
+    )
+    repo = Repository(Database(settings.db_path))
+    service = GenerationService(settings, repo, StorageService(settings.output_root))
+    project_id = service.create_project(
+        {
+            "product_name": "固定参考图测试",
+            "enabled_tasks": "[]",
+            "function_requests": json.dumps(
+                [{"source_type": "agent", "agent_id": agent["id"], "name": "固定构图图"}],
+                ensure_ascii=False,
+            ),
+        },
+        {"filename": "stt.png", "content": make_mock_png("stt"), "content_type": "image/png"},
+        None,
+        {},
+    )
+    service._run_initial(project_id)
+    task = repo.get_tasks(project_id)[0]
+    assert task["task_kind"] == "agent"
+    assert len(task["reference_fields"]) == 3
+    usage = json.loads(task["versions"][0]["api_usage_json"])
+    assert [item["label"] for item in usage["reference_inputs"]] == [
+        "手托比例参考图",
+        "智能体任务参考图1",
+    ]
+
+
+def test_agent_independent_run_uses_temporary_multi_refs_and_runtime_inputs(tmp_path: Path):
+    from services.generation_service import GenerationService
+
+    settings = replace(
+        get_settings(tmp_path),
+        data_dir=tmp_path / "data",
+        output_root=tmp_path / "outputs",
+        db_path=tmp_path / "data" / "app.db",
+        prompt_api_key="",
+        mock_mode=True,
+    )
+    store = AgentStore(settings.data_dir)
+    agent = store.save_agent(
+        {
+            "name": "独立测试 Agent",
+            "prompt": "参考{{Agent参考图}}，在{{自定义使用场景}}中制作一张商品图。",
+            "image_size": "1024x1536",
+            "image_quality": "medium",
+        }
+    )
+    service = GenerationService(
+        settings,
+        Repository(Database(settings.db_path)),
+        StorageService(settings.output_root),
+    )
+    result = service.run_agent(
+        agent["id"],
+        {"自定义使用场景": "年轻职场女性的办公室", "是否系列品": "否"},
+        [
+            {"filename": "one.png", "content": make_mock_png("one"), "content_type": "image/png"},
+        ],
+        {"filename": "stt.png", "content": make_mock_png("stt"), "content_type": "image/png"},
+        None,
+    )
+    assert "年轻职场女性的办公室" in result["resolved_prompt"]
+    assert "输入参考图1＝【手托比例参考图】" in result["effective_prompt"]
+    assert "输入参考图2＝【智能体任务参考图1】" in result["effective_prompt"]
+    assert result["usage"]["image_count"] == 2
+    assert [item["label"] for item in result["usage"]["reference_inputs"]] == [
+        "手托比例参考图",
+        "智能体任务参考图1",
+    ]
+    assert store.resolve_run_file(agent["id"], result["file_path"]).is_file()
+    assert store.get(agent["id"])["reference_paths"] == []
+
+
+def test_agent_independent_series_run_binds_cpt_appearance_and_stt_scale(tmp_path: Path):
+    from services.generation_service import GenerationService
+
+    settings = replace(
+        get_settings(tmp_path),
+        data_dir=tmp_path / "data",
+        output_root=tmp_path / "outputs",
+        db_path=tmp_path / "data" / "app.db",
+        prompt_api_key="",
+        mock_mode=True,
+    )
+    store = AgentStore(settings.data_dir)
+    agent = store.save_agent(
+        {
+            "name": "系列图 Agent",
+            "prompt": "产品外观只参考{{cpt}}，真实比例只参考{{stt}}。",
+            "image_size": "1024x1024",
+            "image_quality": "high",
+        }
+    )
+    service = GenerationService(
+        settings,
+        Repository(Database(settings.db_path)),
+        StorageService(settings.output_root),
+    )
+    result = service.run_agent(
+        agent["id"],
+        {"是否系列品": "是"},
+        [],
+        {"filename": "stt.png", "content": make_mock_png("stt"), "content_type": "image/png"},
+        {"filename": "cpt.png", "content": make_mock_png("cpt"), "content_type": "image/png"},
+    )
+    assert "【系列外观参考图】" in result["resolved_prompt"]
+    assert "【手托比例参考图】" in result["resolved_prompt"]
+    assert [item["label"] for item in result["usage"]["reference_inputs"]] == [
+        "系列外观参考图",
+        "手托比例参考图",
+    ]
+    assert result["usage"]["image_count"] == 2
+
+
+def test_agent_independent_run_requires_actual_image_for_each_referenced_image_role(tmp_path: Path):
+    from services.generation_service import GenerationService
+
+    settings = replace(
+        get_settings(tmp_path),
+        data_dir=tmp_path / "data",
+        output_root=tmp_path / "outputs",
+        db_path=tmp_path / "data" / "app.db",
+        prompt_api_key="",
+        mock_mode=True,
+    )
+    store = AgentStore(settings.data_dir)
+    agent = store.save_agent(
+        {
+            "name": "强校验 Agent",
+            "prompt": "使用{{cpt}}锁定外观，并参考{{Agent参考图}}完成画面。",
+            "image_size": "1024x1024",
+            "image_quality": "medium",
+        }
+    )
+    service = GenerationService(
+        settings,
+        Repository(Database(settings.db_path)),
+        StorageService(settings.output_root),
+    )
+    stt = {"filename": "stt.png", "content": make_mock_png("stt"), "content_type": "image/png"}
+    with pytest.raises(ValueError, match="Agent参考图"):
+        service.run_agent(agent["id"], {"是否系列品": "是"}, [], stt, None)
+    with pytest.raises(ValueError, match="cpt"):
+        service.run_agent(
+            agent["id"],
+            {"是否系列品": "是"},
+            [{"filename": "layout.png", "content": make_mock_png("layout"), "content_type": "image/png"}],
+            stt,
+            None,
+        )

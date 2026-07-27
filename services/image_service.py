@@ -43,18 +43,33 @@ class ImageService:
     def __init__(self, settings):
         self.settings = settings
 
-    def generate(self, prompt: str, image_paths: list[Path], *, seed: str = "") -> tuple[bytes, dict[str, Any]]:
+    def generate(
+        self,
+        prompt: str,
+        image_paths: list[Path],
+        *,
+        seed: str = "",
+        image_size: str | None = None,
+        image_quality: str | None = None,
+    ) -> tuple[bytes, dict[str, Any]]:
+        selected_size = str(image_size or self.settings.image_size)
+        selected_quality = str(image_quality or self.settings.image_quality)
         if self.settings.mock_mode or not self.settings.image_api_base_url or not self.settings.image_api_key:
             time.sleep(0.08)
-            return make_mock_png(seed or prompt), {"mock": True, "image_count": len(image_paths)}
+            return make_mock_png(seed or prompt), {
+                "mock": True,
+                "image_count": len(image_paths),
+                "size": selected_size,
+                "quality": selected_quality,
+            }
         base = self.settings.image_api_base_url.rstrip("/")
         if not base.endswith("/v1"):
             base += "/v1"
         fields = {
             "model": self.settings.image_model,
             "prompt": prompt,
-            "size": self.settings.image_size,
-            "quality": self.settings.image_quality,
+            "size": selected_size,
+            "quality": selected_quality,
             "output_format": self.settings.image_output_format,
             "background": self.settings.image_background,
             "moderation": self.settings.image_moderation,
