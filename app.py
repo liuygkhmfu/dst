@@ -175,6 +175,7 @@ def apply_settings(payload: dict) -> dict:
     SETTINGS = get_settings(ROOT)
     STORAGE = StorageService(SETTINGS.output_root)
     GENERATOR.storage = STORAGE
+    GENERATOR.postprocess_service.storage = STORAGE
     GENERATOR.settings = SETTINGS
     GENERATOR.prompt_service.settings = SETTINGS
     GENERATOR.image_service.settings = SETTINGS
@@ -308,12 +309,22 @@ class Handler(BaseHTTPRequestHandler):
                 files = []
                 project_dir = Path(project["output_dir"])
                 for task in tasks:
+                    if task.get("task_kind") in {"watermark_asset", "collage_template", "collage_text"}:
+                        continue
                     selected = task.get("selected_version_id")
                     versions = task.get("versions", [])
                     # 已确认时导出确认版；未确认时导出当前最新成功版本，避免得到空 ZIP。
                     version = next((v for v in versions if v["id"] == selected), None) or (versions[-1] if versions else None)
                     if version:
-                        files.append(STORAGE.resolve_relative(project_dir, version["file_path"]))
+                        files.append(
+                            STORAGE.resolve_relative(
+                                project_dir,
+                                GENERATOR.final_relative_path(project, task, version),
+                            )
+                        )
+                collage = (project.get("postprocess") or {}).get("collage") or {}
+                if collage.get("status") == "ready" and collage.get("package_path"):
+                    files.append(STORAGE.resolve_relative(project_dir, collage["package_path"]))
                 archive, export_dir = STORAGE.export_final_bundle(project_dir, project["product_name"], files)
                 self.send_data(
                     archive.read_bytes(),

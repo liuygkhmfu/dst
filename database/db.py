@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS projects (
     input_product_path TEXT NOT NULL,
     input_series_path TEXT,
     output_dir TEXT NOT NULL,
+    postprocess_json TEXT NOT NULL DEFAULT '{}',
     status TEXT NOT NULL DEFAULT 'created',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -118,6 +119,8 @@ class Database:
             project_columns = {row["name"] for row in conn.execute("PRAGMA table_info(projects)")}
             if "size_template_id" not in project_columns:
                 conn.execute("ALTER TABLE projects ADD COLUMN size_template_id TEXT NOT NULL DEFAULT 'size-01'")
+            if "postprocess_json" not in project_columns:
+                conn.execute("ALTER TABLE projects ADD COLUMN postprocess_json TEXT NOT NULL DEFAULT '{}'")
             task_columns = {row["name"] for row in conn.execute("PRAGMA table_info(image_tasks)")}
             if "generation_size" not in task_columns:
                 conn.execute("ALTER TABLE image_tasks ADD COLUMN generation_size TEXT NOT NULL DEFAULT ''")
